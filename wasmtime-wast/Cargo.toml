@@ -11,7 +11,6 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-<<<<<<< HEAD
 # cranelift-codegen = { version = "0.36.0", features = ["enable-serde"] }
 # cranelift-native = "0.36.0"
 # cranelift-wasm = { version = "0.36.0", features = ["enable-serde"] }
@@ -20,7 +19,7 @@ edition = "2018"
 # cranelift-codegen = { version = "0.36.0", features = ["enable-serde"] }
 cranelift-codegen = { path = "../../cranelift/cranelift-codegen", features = ["enable-serde"] }
 
-cranelift-native = { path = "../../cranelift/cranelift-native"}
+# cranelift-native = { path = "../../cranelift/cranelift-native"}
 
 # cranelift-entity = { version = "0.36.0", features = ["enable-serde"] }
 cranelift-entity = { path = "../../cranelift/cranelift-entity", features = ["enable-serde"] }
@@ -28,11 +27,6 @@ cranelift-entity = { path = "../../cranelift/cranelift-entity", features = ["ena
 # cranelift-wasm = { version = "0.36.0", features = ["enable-serde"] }
 cranelift-wasm = { path = "../../cranelift/cranelift-wasm", features = ["enable-serde"] }
 
-=======
-cranelift-codegen = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-entity = { version = "0.44.0", features = ["enable-serde"] }
-cranelift-wasm = { version = "0.44.0", features = ["enable-serde"] }
->>>>>>> 872f6aa03dac57539863a92e9f1f6818366e8a4f
 wasmtime-jit = { path = "../wasmtime-jit" }
 wasmtime-runtime = { path = "../wasmtime-runtime" }
 wasmtime-environ = { path = "../wasmtime-environ" }
