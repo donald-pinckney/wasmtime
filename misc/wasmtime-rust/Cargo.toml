@@ -12,8 +12,15 @@ test = false
 doctest = false
 
 [dependencies]
-cranelift-codegen = "0.44.0"
-cranelift-native = "0.44.0"
+# cranelift-codegen = "0.44.0"
+# cranelift-native = "0.44.0"
+# cranelift-codegen = { version = "0.36.0", features = ["enable-serde"] }
+cranelift-codegen = { path = "../../../cranelift/cranelift-codegen"}
+
+# cranelift-entity = { version = "0.36.0", features = ["enable-serde"] }
+cranelift-native = { path = "../../../cranelift/cranelift-native" }
+
+
 failure = "0.1.5"
 wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
 wasmtime-jit = { path = "../../wasmtime-jit" }

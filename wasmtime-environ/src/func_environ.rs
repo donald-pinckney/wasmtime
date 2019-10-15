@@ -674,6 +674,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
+    fn translate_setjmp(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        addr: ir::Value,
+        offset: i32
+    ) -> WasmResult<ir::Value> {
+        unimplemented!()
+    }
+
     fn translate_memory_grow(
         &mut self,
         mut pos: FuncCursor<'_>,

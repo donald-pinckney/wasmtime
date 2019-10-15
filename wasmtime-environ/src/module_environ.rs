@@ -13,6 +13,7 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
+use cranelift_wasm::ModuleTranslationState;
 
 /// Contains function data: byte code and its offset in the module.
 #[derive(Hash)]
@@ -318,8 +319,16 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
+// fn define_function_body(
+//         &mut self,
+//         module_translation_state: &ModuleTranslationState,
+//         body_bytes: &'data [u8],
+//         body_offset: usize,
+//     ) -> WasmResult<()>;
+
     fn define_function_body(
         &mut self,
+        module_translation_state: &ModuleTranslationState,
         body_bytes: &'data [u8],
         body_offset: usize,
     ) -> WasmResult<()> {

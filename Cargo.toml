@@ -20,6 +20,10 @@ cranelift-codegen = { path = "../cranelift/cranelift-codegen", features = ["enab
 # cranelift-entity = { version = "0.36.0", features = ["enable-serde"] }
 cranelift-native = { path = "../cranelift/cranelift-native" }
 
+cranelift-entity = { path = "../cranelift/cranelift-entity", features = ["enable-serde"] }
+cranelift-wasm = { path = "../cranelift/cranelift-wasm", features = ["enable-serde"] }
+
+
 wasmtime-api = { path = "wasmtime-api" }
 wasmtime-debug = { path = "wasmtime-debug" }
 wasmtime-environ = { path = "wasmtime-environ" }
