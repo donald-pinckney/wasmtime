@@ -3,8 +3,9 @@ use std::io::Read;
 use std::path::Path;
 use std::{fmt, fs, io, str};
 use wabt::script::{Action, Command, CommandKind, ModuleBinary, ScriptParser, Value};
+use wabt::Features as WabtFeatures;
 use wasmtime_jit::{
-    ActionError, ActionOutcome, Compiler, Context, InstanceHandle, InstantiationError,
+    ActionError, ActionOutcome, Compiler, Context, Features, InstanceHandle, InstantiationError,
     RuntimeValue, UnknownInstance,
 };
 
@@ -15,6 +16,7 @@ fn runtime_value(v: Value) -> RuntimeValue {
         Value::I64(x) => RuntimeValue::I64(x),
         Value::F32(x) => RuntimeValue::F32(x.to_bits()),
         Value::F64(x) => RuntimeValue::F64(x.to_bits()),
+        Value::V128(x) => RuntimeValue::V128(x.to_le_bytes()),
     }
 }
 
@@ -82,6 +84,14 @@ impl WastContext {
         Self {
             current: None,
             context: Context::new(compiler),
+        }
+    }
+
+    /// Construct a new instance with the given features using the current `Context`
+    pub fn with_features(self, features: Features) -> Self {
+        Self {
+            context: self.context.with_features(features),
+            ..self
         }
     }
 
@@ -187,17 +197,32 @@ impl WastContext {
 
     /// Run a wast script from a byte buffer.
     pub fn run_buffer(&mut self, filename: &str, wast: &[u8]) -> Result<(), WastFileError> {
-        let mut parser =
-            ScriptParser::from_str(str::from_utf8(wast).map_err(|error| WastFileError {
-                filename: filename.to_string(),
-                line: 0,
-                error: WastError::Utf8(error),
-            })?)
-            .map_err(|error| WastFileError {
-                filename: filename.to_string(),
-                line: 0,
-                error: WastError::Syntax(error),
-            })?;
+        let features: WabtFeatures = convert_features(self.context.features());
+
+        // Work around https://github.com/pepyakin/wabt-rs/issues/59
+        let test_filename = Path::new(filename)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+
+        let mut parser = ScriptParser::from_source_and_name_with_features(
+            str::from_utf8(wast)
+                .map_err(|error| WastFileError {
+                    filename: filename.to_string(),
+                    line: 0,
+                    error: WastError::Utf8(error),
+                })?
+                .as_bytes(),
+            &test_filename,
+            features,
+        )
+        .map_err(|error| WastFileError {
+            filename: filename.to_string(),
+            line: 0,
+            error: WastError::Syntax(error),
+        })?;
 
         while let Some(Command { kind, line }) = parser.next().expect("parser") {
             match kind {
@@ -280,14 +305,26 @@ impl WastContext {
                         ActionOutcome::Trapped {
                             message: trap_message,
                         } => {
-                            println!(
-                                "{}:{}: TODO: Check the assert_trap message: expected {}, got {}",
-                                filename, line, message, trap_message
-                            );
+                            if !trap_message.contains(&message) {
+                                #[cfg(feature = "lightbeam")]
+                                println!(
+                                    "{}:{}: TODO: Check the assert_trap message: {}",
+                                    filename, line, message
+                                );
+                                #[cfg(not(feature = "lightbeam"))]
+                                return Err(WastFileError {
+                                    filename: filename.to_string(),
+                                    line,
+                                    error: WastError::Assert(format!(
+                                        "expected {}, got {}",
+                                        message, trap_message
+                                    )),
+                                });
+                            }
                         }
                     }
                 }
-                CommandKind::AssertExhaustion { action } => {
+                CommandKind::AssertExhaustion { action, message } => {
                     match self.perform_action(action).map_err(|error| WastFileError {
                         filename: filename.to_string(),
                         line,
@@ -303,11 +340,19 @@ impl WastContext {
                                 )),
                             });
                         }
-                        ActionOutcome::Trapped { message } => {
-                            println!(
-                                "{}:{}: TODO: Check the assert_exhaustion message: {}",
-                                filename, line, message
-                            );
+                        ActionOutcome::Trapped {
+                            message: trap_message,
+                        } => {
+                            if !trap_message.contains(&message) {
+                                return Err(WastFileError {
+                                    filename: filename.to_string(),
+                                    line,
+                                    error: WastError::Assert(format!(
+                                        "expected exhaustion with {}, got {}",
+                                        message, trap_message
+                                    )),
+                                });
+                            }
                         }
                     }
                 }
@@ -350,6 +395,15 @@ impl WastContext {
                                                 )),
                                             });
                                         }
+                                    }
+                                    RuntimeValue::V128(_) => {
+                                        return Err(WastFileError {
+                                            filename: filename.to_string(),
+                                            line,
+                                            error: WastError::Type(format!(
+                                                "unexpected vector type in NaN test"
+                                            )),
+                                        });
                                     }
                                 };
                             }
@@ -402,6 +456,15 @@ impl WastContext {
                                                 )),
                                             });
                                         }
+                                    }
+                                    RuntimeValue::V128(_) => {
+                                        return Err(WastFileError {
+                                            filename: filename.to_string(),
+                                            line,
+                                            error: WastError::Type(format!(
+                                                "unexpected vector type in NaN test",
+                                            )),
+                                        });
                                     }
                                 };
                             }
@@ -478,4 +541,23 @@ fn read_to_end(path: &Path) -> Result<Vec<u8>, io::Error> {
     let mut file = fs::File::open(path)?;
     file.read_to_end(&mut buf)?;
     Ok(buf)
+}
+
+/// Helper to convert wasmtime features to WABT features; would be nicer as Into<WabtFeatures> but
+/// wasmtime-jit does not have a wabt dependency
+fn convert_features(features: &Features) -> WabtFeatures {
+    let mut wabt_features = WabtFeatures::new();
+    if features.simd {
+        wabt_features.enable_simd()
+    }
+    if features.multi_value {
+        wabt_features.enable_multi_value()
+    }
+    if features.bulk_memory {
+        wabt_features.enable_bulk_memory()
+    }
+    if features.threads {
+        wabt_features.enable_threads()
+    }
+    wabt_features
 }

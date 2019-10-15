@@ -1,6 +1,9 @@
 use crate::func_environ::FuncEnvironment;
 use crate::module::{Export, MemoryPlan, Module, TableElements, TablePlan};
 use crate::tunables::Tunables;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::convert::TryFrom;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
@@ -10,12 +13,9 @@ use cranelift_wasm::{
     self, translate_module, DefinedFuncIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     SignatureIndex, Table, TableIndex, WasmResult,
 };
-use sha2::{Digest, Sha256};
-use std::boxed::Box;
-use std::string::String;
-use std::vec::Vec;
 
 /// Contains function data: byte code and its offset in the module.
+#[derive(Hash)]
 pub struct FunctionBodyData<'a> {
     /// Body byte code.
     pub data: &'a [u8],
@@ -80,11 +80,6 @@ impl<'data> ModuleEnvironment<'data> {
     pub fn translate(mut self, data: &'data [u8]) -> WasmResult<ModuleTranslation<'data>> {
         translate_module(data, &mut self)?;
 
-        // TODO: this is temporary workaround and will be replaced with derive macro.
-        let mut hasher = Sha256::new();
-        hasher.input(data);
-        self.result.module.hash = Some(hasher.result().into());
-
         Ok(self.result)
     }
 }
@@ -96,20 +91,27 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result.target_config
     }
 
-    fn reserve_signatures(&mut self, num: u32) {
+    fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .signatures
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
-    fn declare_signature(&mut self, sig: ir::Signature) {
+    fn declare_signature(&mut self, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
         self.result.module.signatures.push(sig);
+        Ok(())
     }
 
-    fn declare_func_import(&mut self, sig_index: SignatureIndex, module: &str, field: &str) {
+    fn declare_func_import(
+        &mut self,
+        sig_index: SignatureIndex,
+        module: &str,
+        field: &str,
+    ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.functions.len(),
             self.result.module.imported_funcs.len(),
@@ -121,9 +123,10 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .imported_funcs
             .push((String::from(module), String::from(field)));
+        Ok(())
     }
 
-    fn declare_table_import(&mut self, table: Table, module: &str, field: &str) {
+    fn declare_table_import(&mut self, table: Table, module: &str, field: &str) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.table_plans.len(),
             self.result.module.imported_tables.len(),
@@ -136,9 +139,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .imported_tables
             .push((String::from(module), String::from(field)));
+        Ok(())
     }
 
-    fn declare_memory_import(&mut self, memory: Memory, module: &str, field: &str) {
+    fn declare_memory_import(
+        &mut self,
+        memory: Memory,
+        module: &str,
+        field: &str,
+    ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.memory_plans.len(),
             self.result.module.imported_memories.len(),
@@ -151,9 +160,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .imported_memories
             .push((String::from(module), String::from(field)));
+        Ok(())
     }
 
-    fn declare_global_import(&mut self, global: Global, module: &str, field: &str) {
+    fn declare_global_import(
+        &mut self,
+        global: Global,
+        module: &str,
+        field: &str,
+    ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.globals.len(),
             self.result.module.imported_globals.len(),
@@ -165,16 +180,18 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .imported_globals
             .push((String::from(module), String::from(field)));
+        Ok(())
     }
 
-    fn finish_imports(&mut self) {
+    fn finish_imports(&mut self) -> WasmResult<()> {
         self.result.module.imported_funcs.shrink_to_fit();
         self.result.module.imported_tables.shrink_to_fit();
         self.result.module.imported_memories.shrink_to_fit();
         self.result.module.imported_globals.shrink_to_fit();
+        Ok(())
     }
 
-    fn reserve_func_types(&mut self, num: u32) {
+    fn reserve_func_types(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .functions
@@ -182,92 +199,107 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.result
             .function_body_inputs
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
-    fn declare_func_type(&mut self, sig_index: SignatureIndex) {
+    fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
         self.result.module.functions.push(sig_index);
+        Ok(())
     }
 
-    fn reserve_tables(&mut self, num: u32) {
+    fn reserve_tables(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .table_plans
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
-    fn declare_table(&mut self, table: Table) {
+    fn declare_table(&mut self, table: Table) -> WasmResult<()> {
         let plan = TablePlan::for_table(table, &self.result.tunables);
         self.result.module.table_plans.push(plan);
+        Ok(())
     }
 
-    fn reserve_memories(&mut self, num: u32) {
+    fn reserve_memories(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .memory_plans
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
-    fn declare_memory(&mut self, memory: Memory) {
+    fn declare_memory(&mut self, memory: Memory) -> WasmResult<()> {
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
         self.result.module.memory_plans.push(plan);
+        Ok(())
     }
 
-    fn reserve_globals(&mut self, num: u32) {
+    fn reserve_globals(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .globals
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
-    fn declare_global(&mut self, global: Global) {
+    fn declare_global(&mut self, global: Global) -> WasmResult<()> {
         self.result.module.globals.push(global);
+        Ok(())
     }
 
-    fn reserve_exports(&mut self, num: u32) {
+    fn reserve_exports(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .exports
             .reserve(usize::try_from(num).unwrap());
+        Ok(())
     }
 
-    fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) {
+    fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) -> WasmResult<()> {
         self.result
             .module
             .exports
             .insert(String::from(name), Export::Function(func_index));
+        Ok(())
     }
 
-    fn declare_table_export(&mut self, table_index: TableIndex, name: &str) {
+    fn declare_table_export(&mut self, table_index: TableIndex, name: &str) -> WasmResult<()> {
         self.result
             .module
             .exports
             .insert(String::from(name), Export::Table(table_index));
+        Ok(())
     }
 
-    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) {
+    fn declare_memory_export(&mut self, memory_index: MemoryIndex, name: &str) -> WasmResult<()> {
         self.result
             .module
             .exports
             .insert(String::from(name), Export::Memory(memory_index));
+        Ok(())
     }
 
-    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) {
+    fn declare_global_export(&mut self, global_index: GlobalIndex, name: &str) -> WasmResult<()> {
         self.result
             .module
             .exports
             .insert(String::from(name), Export::Global(global_index));
+        Ok(())
     }
 
-    fn declare_start_func(&mut self, func_index: FuncIndex) {
+    fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
         debug_assert!(self.result.module.start_func.is_none());
         self.result.module.start_func = Some(func_index);
+        Ok(())
     }
 
-    fn reserve_table_elements(&mut self, num: u32) {
+    fn reserve_table_elements(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
             .table_elements
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
     fn declare_table_elements(
@@ -276,13 +308,14 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         base: Option<GlobalIndex>,
         offset: usize,
         elements: Box<[FuncIndex]>,
-    ) {
+    ) -> WasmResult<()> {
         self.result.module.table_elements.push(TableElements {
             table_index,
             base,
             offset,
             elements,
         });
+        Ok(())
     }
 
     fn define_function_body(
@@ -297,10 +330,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn reserve_data_initializers(&mut self, num: u32) {
+    fn reserve_data_initializers(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .data_initializers
             .reserve_exact(usize::try_from(num).unwrap());
+        Ok(())
     }
 
     fn declare_data_initialization(
@@ -309,7 +343,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         base: Option<GlobalIndex>,
         offset: usize,
         data: &'data [u8],
-    ) {
+    ) -> WasmResult<()> {
         self.result.data_initializers.push(DataInitializer {
             location: DataInitializerLocation {
                 memory_index,
@@ -318,6 +352,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             },
             data,
         });
+        Ok(())
     }
 }
 

@@ -1,3 +1,4 @@
+use alloc::string::String;
 use cranelift_codegen::settings;
 use cranelift_codegen::settings::Configurable;
 use cranelift_entity::EntityRef;
@@ -95,6 +96,9 @@ pub fn emit_functions(
                         at: r.offset as u64,
                     })
                     .map_err(|err| format!("{}", err))?;
+                }
+                RelocationTarget::JumpTable(_, _) => {
+                    // ignore relocations for jump tables
                 }
                 _ => panic!("relocations target not supported yet: {:?}", r.reloc_target),
             };

@@ -1,0 +1,31 @@
+[package]
+name = "wasmtime-py"
+version = "0.2.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Python extension for Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm", "python"]
+edition = "2018"
+
+[lib]
+name = "_wasmtime"
+crate-type = ["cdylib"]
+
+[dependencies]
+cranelift-codegen = "0.44.0"
+cranelift-native = "0.44.0"
+cranelift-entity = "0.44.0"
+cranelift-wasm = "0.44.0"
+cranelift-frontend = "0.44.0"
+wasmtime-environ = { path = "../../wasmtime-environ" }
+wasmtime-interface-types = { path = "../../wasmtime-interface-types" }
+wasmtime-jit = { path = "../../wasmtime-jit" }
+wasmtime-runtime = { path = "../../wasmtime-runtime" }
+target-lexicon = { version = "0.8.1", default-features = false }
+failure = "0.1"
+region = "2.0.0"
+wasmparser = "0.39.1"
+
+[dependencies.pyo3]
+version = "0.8.0"
+features = ["extension-module"]

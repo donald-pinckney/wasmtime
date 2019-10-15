@@ -21,20 +21,14 @@
         clippy::use_self
     )
 )]
-#![no_std]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[macro_use]
+extern crate alloc;
 
 #[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
+use hashbrown::{hash_map, HashMap, HashSet};
 #[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
-
-#[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap};
-#[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 
 #[macro_use]
 extern crate failure_derive;
@@ -50,8 +44,8 @@ mod resolver;
 mod target_tunables;
 
 pub use crate::action::{ActionError, ActionOutcome, RuntimeValue};
-pub use crate::compiler::Compiler;
-pub use crate::context::{Context, ContextError, UnknownInstance};
+pub use crate::compiler::{CompilationStrategy, Compiler};
+pub use crate::context::{Context, ContextError, Features, UnknownInstance};
 pub use crate::instantiate::{instantiate, CompiledModule, SetupError};
 pub use crate::link::link_module;
 pub use crate::namespace::Namespace;

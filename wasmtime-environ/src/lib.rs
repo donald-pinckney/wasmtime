@@ -24,15 +24,8 @@
         clippy::use_self
     )
 )]
-#![no_std]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(not(feature = "std"))]
-#[macro_use]
-extern crate alloc as std;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate std;
+extern crate alloc;
 
 #[macro_use]
 extern crate failure_derive;
@@ -51,10 +44,13 @@ pub mod cranelift;
 #[cfg(feature = "lightbeam")]
 pub mod lightbeam;
 
-pub use crate::address_map::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
-pub use crate::cache::conf as cache_conf;
+pub use crate::address_map::{
+    FunctionAddressMap, InstructionAddressMap, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges,
+};
+pub use crate::cache::{create_new_config as cache_create_new_config, init as cache_init};
 pub use crate::compilation::{
     Compilation, CompileError, Compiler, Relocation, RelocationTarget, Relocations,
+    TrapInformation, Traps,
 };
 pub use crate::cranelift::Cranelift;
 pub use crate::func_environ::BuiltinFunctionIndex;

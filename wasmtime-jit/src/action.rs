@@ -2,12 +2,12 @@
 
 use crate::compiler::Compiler;
 use crate::instantiate::SetupError;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::cmp::max;
 use core::{fmt, mem, ptr, slice};
 use cranelift_codegen::ir;
-use std::string::String;
-use std::vec::Vec;
-use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle};
+use wasmtime_runtime::{wasmtime_call_trampoline, Export, InstanceHandle, VMInvokeArgument};
 
 /// A runtime value.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -20,23 +20,26 @@ pub enum RuntimeValue {
     F32(u32),
     /// A runtime value with type f64.
     F64(u64),
+    /// A runtime value with type v128
+    V128([u8; 16]),
 }
 
 impl RuntimeValue {
     /// Return the type of this `RuntimeValue`.
     pub fn value_type(self) -> ir::Type {
         match self {
-            RuntimeValue::I32(_) => ir::types::I32,
-            RuntimeValue::I64(_) => ir::types::I64,
-            RuntimeValue::F32(_) => ir::types::F32,
-            RuntimeValue::F64(_) => ir::types::F64,
+            Self::I32(_) => ir::types::I32,
+            Self::I64(_) => ir::types::I64,
+            Self::F32(_) => ir::types::F32,
+            Self::F64(_) => ir::types::F64,
+            Self::V128(_) => ir::types::I8X16,
         }
     }
 
     /// Assuming this `RuntimeValue` holds an `i32`, return that value.
     pub fn unwrap_i32(self) -> i32 {
         match self {
-            RuntimeValue::I32(x) => x,
+            Self::I32(x) => x,
             _ => panic!("unwrapping value of type {} as i32", self.value_type()),
         }
     }
@@ -44,7 +47,7 @@ impl RuntimeValue {
     /// Assuming this `RuntimeValue` holds an `i64`, return that value.
     pub fn unwrap_i64(self) -> i64 {
         match self {
-            RuntimeValue::I64(x) => x,
+            Self::I64(x) => x,
             _ => panic!("unwrapping value of type {} as i64", self.value_type()),
         }
     }
@@ -57,7 +60,7 @@ impl RuntimeValue {
     /// Assuming this `RuntimeValue` holds an `f32`, return the bits of that value as a `u32`.
     pub fn unwrap_f32_bits(self) -> u32 {
         match self {
-            RuntimeValue::F32(x) => x,
+            Self::F32(x) => x,
             _ => panic!("unwrapping value of type {} as f32", self.value_type()),
         }
     }
@@ -70,7 +73,7 @@ impl RuntimeValue {
     /// Assuming this `RuntimeValue` holds an `f64`, return the bits of that value as a `u64`.
     pub fn unwrap_f64_bits(self) -> u64 {
         match self {
-            RuntimeValue::F64(x) => x,
+            Self::F64(x) => x,
             _ => panic!("unwrapping value of type {} as f64", self.value_type()),
         }
     }
@@ -79,10 +82,11 @@ impl RuntimeValue {
 impl fmt::Display for RuntimeValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RuntimeValue::I32(x) => write!(f, "{}: i32", x),
-            RuntimeValue::I64(x) => write!(f, "{}: i64", x),
-            RuntimeValue::F32(x) => write!(f, "{}: f32", x),
-            RuntimeValue::F64(x) => write!(f, "{}: f64", x),
+            Self::I32(x) => write!(f, "{}: i32", x),
+            Self::I64(x) => write!(f, "{}: i64", x),
+            Self::F32(x) => write!(f, "{}: f32", x),
+            Self::F64(x) => write!(f, "{}: f64", x),
+            Self::V128(x) => write!(f, "{:?}: v128", x.to_vec()),
         }
     }
 }
@@ -157,12 +161,12 @@ pub fn invoke(
         assert_eq!(value.value_type(), signature.params[index + 1].value_type);
     }
 
-    // TODO: Support values larger than u64. And pack the values into memory
+    // TODO: Support values larger than v128. And pack the values into memory
     // instead of just using fixed-sized slots.
     // Subtract one becase we don't pass the vmctx argument in `values_vec`.
-    let value_size = mem::size_of::<u64>();
-    let mut values_vec: Vec<u64> =
-        vec![0; max(signature.params.len() - 1, signature.returns.len())];
+    let value_size = mem::size_of::<VMInvokeArgument>();
+    let mut values_vec: Vec<VMInvokeArgument> =
+        vec![VMInvokeArgument::new(); max(signature.params.len() - 1, signature.returns.len())];
 
     // Store the argument values into `values_vec`.
     for (index, arg) in args.iter().enumerate() {
@@ -174,6 +178,7 @@ pub fn invoke(
                 RuntimeValue::I64(x) => ptr::write(ptr as *mut i64, *x),
                 RuntimeValue::F32(x) => ptr::write(ptr as *mut u32, *x),
                 RuntimeValue::F64(x) => ptr::write(ptr as *mut u64, *x),
+                RuntimeValue::V128(x) => ptr::write(ptr as *mut [u8; 16], *x),
             }
         }
     }
@@ -210,6 +215,7 @@ pub fn invoke(
                 ir::types::I64 => RuntimeValue::I64(ptr::read(ptr as *const i64)),
                 ir::types::F32 => RuntimeValue::F32(ptr::read(ptr as *const u32)),
                 ir::types::F64 => RuntimeValue::F64(ptr::read(ptr as *const u64)),
+                ir::types::I8X16 => RuntimeValue::V128(ptr::read(ptr as *const [u8; 16])),
                 other => panic!("unsupported value type {:?}", other),
             }
         })

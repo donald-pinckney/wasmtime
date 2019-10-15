@@ -408,6 +408,10 @@ HandleTrap(CONTEXT* context)
 {
     assert(sAlreadyHandlingTrap);
 
+    if (!CheckIfTrapAtAddress(ContextToPC(context))) {
+        return false;
+    }
+
     RecordTrap(ContextToPC(context));
 
     // Unwind calls longjmp, so it doesn't run the automatic
@@ -668,7 +672,7 @@ WasmTrapHandler(int signum, siginfo_t* info, void* context)
 extern "C" MFBT_API bool IsSignalHandlingBroken();
 #endif
 
-bool
+int
 EnsureEagerSignalHandlers()
 {
 #if defined(ANDROID) && defined(MOZ_LINKER)
@@ -765,7 +769,7 @@ EnsureEagerSignalHandlers()
     return true;
 }
 
-bool
+int
 EnsureDarwinMachPorts()
 {
 #ifdef USE_APPLE_MACH_PORTS

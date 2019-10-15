@@ -1,9 +1,11 @@
+use alloc::string::String;
+use alloc::vec::Vec;
 use gimli::write::{Address, Dwarf, EndianVec, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
 
+use core::result;
 use faerie::artifact::{Decl, SectionKind};
 use faerie::*;
-use std::result;
 
 #[derive(Clone)]
 struct DebugReloc {
@@ -25,7 +27,7 @@ pub trait SymbolResolver {
 pub fn emit_dwarf(
     artifact: &mut Artifact,
     mut dwarf: Dwarf,
-    symbol_resolver: &SymbolResolver,
+    symbol_resolver: &dyn SymbolResolver,
 ) -> result::Result<(), failure::Error> {
     let endian = RunTimeEndian::Little;
 
@@ -61,11 +63,11 @@ pub fn emit_dwarf(
 pub struct WriterRelocate<'a> {
     relocs: Vec<DebugReloc>,
     writer: EndianVec<RunTimeEndian>,
-    symbol_resolver: &'a SymbolResolver,
+    symbol_resolver: &'a dyn SymbolResolver,
 }
 
 impl<'a> WriterRelocate<'a> {
-    pub fn new(endian: RunTimeEndian, symbol_resolver: &'a SymbolResolver) -> Self {
+    pub fn new(endian: RunTimeEndian, symbol_resolver: &'a dyn SymbolResolver) -> Self {
         WriterRelocate {
             relocs: Vec::new(),
             writer: EndianVec::new(endian),

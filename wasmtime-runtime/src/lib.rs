@@ -21,6 +21,7 @@
         clippy::use_self
     )
 )]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -28,6 +29,7 @@ extern crate lazy_static;
 extern crate memoffset;
 #[macro_use]
 extern crate failure_derive;
+extern crate alloc;
 
 mod export;
 mod imports;
@@ -38,6 +40,7 @@ mod mmap;
 mod sig_registry;
 mod signalhandlers;
 mod table;
+mod trap_registry;
 mod traphandlers;
 mod vmcontext;
 
@@ -50,11 +53,23 @@ pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
 pub use crate::signalhandlers::{wasmtime_init_eager, wasmtime_init_finish};
+pub use crate::trap_registry::{get_mut_trap_registry, get_trap_registry, TrapRegistrationGuard};
 pub use crate::traphandlers::{wasmtime_call, wasmtime_call_trampoline};
 pub use crate::vmcontext::{
-    VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
-    VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
+    VMGlobalImport, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
+    VMTableDefinition, VMTableImport,
 };
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{hash_map, HashMap, HashSet};
+#[cfg(feature = "std")]
+use std::collections::{hash_map, HashMap, HashSet};
+
+#[cfg(not(feature = "std"))]
+use spin::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(feature = "std")]
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -4,21 +4,40 @@ use super::HashMap;
 use crate::code_memory::CodeMemory;
 use crate::instantiate::SetupError;
 use crate::target_tunables::target_tunables;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
-use cranelift_entity::PrimaryMap;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_wasm::DefinedFuncIndex;
-use std::boxed::Box;
-use std::string::String;
-use std::vec::Vec;
+use cranelift_wasm::{DefinedFuncIndex, DefinedMemoryIndex};
 use wasmtime_debug::{emit_debugsections_image, DebugInfoData};
 use wasmtime_environ::{
-    Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, Relocations, Tunables,
+    Compilation, CompileError, Compiler as _C, FunctionBodyData, Module, ModuleVmctxInfo,
+    Relocations, Traps, Tunables, VMOffsets,
 };
-use wasmtime_runtime::{InstantiationError, SignatureRegistry, VMFunctionBody};
+use wasmtime_runtime::{
+    get_mut_trap_registry, InstantiationError, SignatureRegistry, TrapRegistrationGuard,
+    VMFunctionBody,
+};
+
+/// Select which kind of compilation to use.
+#[derive(Copy, Clone, Debug)]
+pub enum CompilationStrategy {
+    /// Let Wasmtime pick the strategy.
+    Auto,
+
+    /// Compile all functions with Cranelift.
+    Cranelift,
+
+    /// Compile all functions with Lightbeam.
+    #[cfg(feature = "lightbeam")]
+    Lightbeam,
+}
 
 /// A WebAssembly code JIT compiler.
 ///
@@ -32,8 +51,10 @@ pub struct Compiler {
     isa: Box<dyn TargetIsa>,
 
     code_memory: CodeMemory,
+    trap_registration_guards: Vec<TrapRegistrationGuard>,
     trampoline_park: HashMap<*const VMFunctionBody, *const VMFunctionBody>,
     signatures: SignatureRegistry,
+    strategy: CompilationStrategy,
 
     /// The `FunctionBuilderContext`, shared between trampline function compilations.
     fn_builder_ctx: FunctionBuilderContext,
@@ -41,21 +62,32 @@ pub struct Compiler {
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
+    pub fn new(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy) -> Self {
         Self {
             isa,
             code_memory: CodeMemory::new(),
+            trap_registration_guards: Vec::new(),
             trampoline_park: HashMap::new(),
             signatures: SignatureRegistry::new(),
             fn_builder_ctx: FunctionBuilderContext::new(),
+            strategy,
         }
     }
 }
 
-#[cfg(feature = "lightbeam")]
-type DefaultCompiler = wasmtime_environ::lightbeam::Lightbeam;
-#[cfg(not(feature = "lightbeam"))]
-type DefaultCompiler = wasmtime_environ::cranelift::Cranelift;
+impl Drop for Compiler {
+    fn drop(&mut self) {
+        // We must deregister traps before freeing the code memory.
+        // Otherwise, we have a race:
+        // - Compiler #1 dropped code memory, but hasn't deregistered the trap yet
+        // - Compiler #2 allocated code memory and tries to register a trap,
+        //   but the trap at certain address happens to be already registered,
+        //   since Compiler #1 hasn't deregistered it yet => assertion in trap registry fails.
+        // Having a custom drop implementation we are independent from the field order
+        // in the struct what reduces potential human error.
+        self.trap_registration_guards.clear();
+    }
+}
 
 impl Compiler {
     /// Return the target's frontend configuration settings.
@@ -83,13 +115,29 @@ impl Compiler {
         ),
         SetupError,
     > {
-        let (compilation, relocations, address_transform) = DefaultCompiler::compile_module(
-            module,
-            function_body_inputs,
-            &*self.isa,
-            debug_data.is_some(),
-        )
-        .map_err(SetupError::Compile)?;
+        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
+            match self.strategy {
+                // For now, interpret `Auto` as `Cranelift` since that's the most stable
+                // implementation.
+                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                    wasmtime_environ::cranelift::Cranelift::compile_module(
+                        module,
+                        function_body_inputs,
+                        &*self.isa,
+                        debug_data.is_some(),
+                    )
+                }
+                #[cfg(feature = "lightbeam")]
+                CompilationStrategy::Lightbeam => {
+                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
+                        module,
+                        function_body_inputs,
+                        &*self.isa,
+                        debug_data.is_some(),
+                    )
+                }
+            }
+            .map_err(SetupError::Compile)?;
 
         let allocated_functions =
             allocate_functions(&mut self.code_memory, &compilation).map_err(|message| {
@@ -98,6 +146,12 @@ impl Compiler {
                     message
                 )))
             })?;
+
+        register_traps(
+            &allocated_functions,
+            &traps,
+            &mut self.trap_registration_guards,
+        );
 
         let dbg = if let Some(debug_data) = debug_data {
             let target_config = self.isa.frontend_config();
@@ -108,11 +162,22 @@ impl Compiler {
                 let body_len = compilation.get(i).body.len();
                 funcs.push((ptr, body_len));
             }
+            let module_vmctx_info = {
+                let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
+                let memory_offset =
+                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)) as i64;
+                ModuleVmctxInfo {
+                    memory_offset,
+                    stack_slots,
+                }
+            };
             let bytes = emit_debugsections_image(
                 triple,
                 &target_config,
                 &debug_data,
+                &module_vmctx_info,
                 &address_transform,
+                &value_ranges,
                 &funcs,
             )
             .map_err(|e| SetupError::DebugInfo(e))?;
@@ -151,12 +216,25 @@ impl Compiler {
         })
     }
 
+    /// Create and publish a trampoline for invoking a function.
+    pub fn get_published_trampoline(
+        &mut self,
+        callee_address: *const VMFunctionBody,
+        signature: &ir::Signature,
+        value_size: usize,
+    ) -> Result<*const VMFunctionBody, SetupError> {
+        let result = self.get_trampoline(callee_address, signature, value_size)?;
+        self.publish_compiled_code();
+        Ok(result)
+    }
+
     /// Make memory containing compiled code executable.
     pub(crate) fn publish_compiled_code(&mut self) {
         self.code_memory.publish();
     }
 
-    pub(crate) fn signatures(&mut self) -> &mut SignatureRegistry {
+    /// Shared signature registry.
+    pub fn signatures(&mut self) -> &mut SignatureRegistry {
         &mut self.signatures
     }
 }
@@ -245,8 +323,15 @@ fn make_trampoline(
     let mut code_buf: Vec<u8> = Vec::new();
     let mut reloc_sink = RelocSink {};
     let mut trap_sink = binemit::NullTrapSink {};
+    let mut stackmap_sink = binemit::NullStackmapSink {};
     context
-        .compile_and_emit(isa, &mut code_buf, &mut reloc_sink, &mut trap_sink)
+        .compile_and_emit(
+            isa,
+            &mut code_buf,
+            &mut reloc_sink,
+            &mut trap_sink,
+            &mut stackmap_sink,
+        )
         .map_err(|error| SetupError::Compile(CompileError::Codegen(error)))?;
 
     Ok(code_memory
@@ -276,6 +361,24 @@ fn allocate_functions(
     Ok(result)
 }
 
+fn register_traps(
+    allocated_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    traps: &Traps,
+    trap_registration_guards: &mut Vec<TrapRegistrationGuard>,
+) {
+    let mut trap_registry = get_mut_trap_registry();
+    for (func_addr, func_traps) in allocated_functions.values().zip(traps.values()) {
+        for trap_desc in func_traps.iter() {
+            let func_addr = *func_addr as *const u8 as usize;
+            let offset = usize::try_from(trap_desc.code_offset).unwrap();
+            let trap_addr = func_addr + offset;
+            let guard =
+                trap_registry.register_trap(trap_addr, trap_desc.source_loc, trap_desc.trap_code);
+            trap_registration_guards.push(guard);
+        }
+    }
+}
+
 /// We don't expect trampoline compilation to produce any relocations, so
 /// this `RelocSink` just asserts that it doesn't recieve any.
 struct RelocSink {}
@@ -297,6 +400,14 @@ impl binemit::RelocSink for RelocSink {
         _addend: binemit::Addend,
     ) {
         panic!("trampoline compilation should not produce external symbol relocs");
+    }
+    fn reloc_constant(
+        &mut self,
+        _code_offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _constant_offset: ir::ConstantOffset,
+    ) {
+        panic!("trampoline compilation should not produce constant relocs");
     }
     fn reloc_jt(
         &mut self,

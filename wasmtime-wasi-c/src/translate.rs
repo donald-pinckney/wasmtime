@@ -1,5 +1,5 @@
+use core::convert::TryFrom;
 use host;
-use std::convert::TryFrom;
 use std::mem::{align_of, size_of, zeroed};
 use std::slice;
 use wasm32;
@@ -26,29 +26,29 @@ unsafe fn decode_ptr(
                 let last = match (ptr as usize).checked_add(len - 1) {
                     Some(sum) => sum,
                     None => {
-                        println!("!!! overflow");
+                        debug!("overflow in decode_ptr");
                         return Err(host::__WASI_EFAULT as host::__wasi_errno_t);
                     }
                 };
                 // Check for out of bounds.
                 if last >= (*definition).current_length {
-                    println!("!!! out of bounds");
+                    debug!("out of bounds in decode_ptr");
                     return Err(host::__WASI_EFAULT as host::__wasi_errno_t);
                 }
             }
             // Check alignment.
             if (ptr as usize) % align != 0 {
-                println!("!!! bad alignment: {} % {}", ptr, align);
+                debug!("bad alignment in decode_ptr: {} % {}", ptr, align);
                 return Err(host::__WASI_EINVAL as host::__wasi_errno_t);
             }
             // Ok, translate the address.
             Ok((((*definition).base as usize) + (ptr as usize)) as *mut u8)
         }
-        // No export named "__wasi_memory", or the export isn't a memory.
+        // No export named "memory", or the export isn't a memory.
         // FIXME: Is EINVAL the best code here?
         x => {
-            println!(
-                "!!! no export named __wasi_memory, or the export isn't a mem: {:?}",
+            error!(
+                "no export named \"memory\", or the export isn't a mem: {:?}",
                 x
             );
             Err(host::__WASI_EINVAL as host::__wasi_errno_t)

@@ -15,9 +15,15 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMSharedSignatureIndex,
     VMTableDefinition, VMTableImport,
 };
+use crate::{HashMap, HashSet};
+use alloc::borrow::ToOwned;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::string::{String, ToString};
 use core::any::Any;
 use core::borrow::Borrow;
 use core::cell::RefCell;
+use core::convert::TryFrom;
 use core::slice;
 use core::{mem, ptr};
 use cranelift_entity::EntityRef;
@@ -27,12 +33,6 @@ use cranelift_wasm::{
     GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableIndex,
 };
 use indexmap;
-use std::borrow::ToOwned;
-use std::boxed::Box;
-use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
-use std::rc::Rc;
-use std::string::{String, ToString};
 use wasmtime_environ::{DataInitializer, Module, TableElements, VMOffsets};
 
 fn signature_id(
@@ -441,7 +441,7 @@ impl Instance {
     }
 
     /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut Any {
+    pub fn host_state(&mut self) -> &mut dyn Any {
         &mut *self.host_state
     }
 
@@ -475,8 +475,8 @@ impl Instance {
         } else if let Some(start_export) = self.module.exports.get("_start") {
             // As a compatibility measure, if the module doesn't have a start
             // function but does have a _start function exported, call that.
-            match start_export {
-                &wasmtime_environ::Export::Function(func_index) => {
+            match *start_export {
+                wasmtime_environ::Export::Function(func_index) => {
                     let sig = &self.module.signatures[self.module.functions[func_index]];
                     // No wasm params or returns; just the vmctx param.
                     if sig.params.len() == 1 && sig.returns.is_empty() {
@@ -491,8 +491,8 @@ impl Instance {
             // As a further compatibility measure, if the module doesn't have a
             // start function or a _start function exported, but does have a main
             // function exported, call that.
-            match main_export {
-                &wasmtime_environ::Export::Function(func_index) => {
+            match *main_export {
+                wasmtime_environ::Export::Function(func_index) => {
                     let sig = &self.module.signatures[self.module.functions[func_index]];
                     // No wasm params or returns; just the vmctx param.
                     if sig.params.len() == 1 && sig.returns.is_empty() {
@@ -613,14 +613,55 @@ impl Instance {
     }
 
     pub(crate) fn lookup_global_export(&self, field: &str) -> Option<Export> {
-        let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
+        let cell: &RefCell<HashMap<alloc::string::String, core::option::Option<Export>>> =
             self.global_exports.borrow();
-        let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
+        let map: &mut HashMap<alloc::string::String, core::option::Option<Export>> =
             &mut cell.borrow_mut();
         if let Some(Some(export)) = map.get(field) {
             return Some(export.clone());
         }
         None
+    }
+
+    /// Grow table by the specified amount of elements.
+    ///
+    /// Returns `None` if table can't be grown by the specified amount
+    /// of elements.
+    pub(crate) fn table_grow(&mut self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
+        let result = self
+            .tables
+            .get_mut(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .grow(delta);
+
+        // Keep current the VMContext pointers used by compiled wasm code.
+        *self.table_mut(table_index) = self.tables[table_index].vmtable();
+
+        result
+    }
+
+    // Get table element by index.
+    pub(crate) fn table_get(
+        &self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&VMCallerCheckedAnyfunc> {
+        self.tables
+            .get(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .get(index)
+    }
+
+    // Get table mutable element by index.
+    pub(crate) fn table_get_mut(
+        &mut self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&mut VMCallerCheckedAnyfunc> {
+        self.tables
+            .get_mut(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+            .get_mut(index)
     }
 }
 
@@ -749,10 +790,10 @@ impl InstanceHandle {
 
         // Collect the exports for the global export map.
         for (field, decl) in &instance.module.exports {
-            use std::collections::hash_map::Entry::*;
-            let cell: &RefCell<HashMap<std::string::String, core::option::Option<Export>>> =
+            use crate::hash_map::Entry::*;
+            let cell: &RefCell<HashMap<alloc::string::String, core::option::Option<Export>>> =
                 instance.global_exports.borrow();
-            let map: &mut HashMap<std::string::String, core::option::Option<Export>> =
+            let map: &mut HashMap<alloc::string::String, core::option::Option<Export>> =
                 &mut cell.borrow_mut();
             match map.entry(field.to_string()) {
                 Vacant(entry) => {
@@ -855,7 +896,7 @@ impl InstanceHandle {
     }
 
     /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&mut self) -> &mut Any {
+    pub fn host_state(&mut self) -> &mut dyn Any {
         self.instance_mut().host_state()
     }
 
@@ -870,6 +911,41 @@ impl InstanceHandle {
     /// of pages.
     pub fn memory_grow(&mut self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
         self.instance_mut().memory_grow(memory_index, delta)
+    }
+
+    /// Return the table index for the given `VMTableDefinition` in this instance.
+    pub fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
+        self.instance().table_index(table)
+    }
+
+    /// Grow table in this instance by the specified amount of pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of pages.
+    pub fn table_grow(&mut self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
+        self.instance_mut().table_grow(table_index, delta)
+    }
+
+    /// Get table element reference.
+    ///
+    /// Returns `None` if index is out of bounds.
+    pub fn table_get(
+        &self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&VMCallerCheckedAnyfunc> {
+        self.instance().table_get(table_index, index)
+    }
+
+    /// Get mutable table element reference.
+    ///
+    /// Returns `None` if index is out of bounds.
+    pub fn table_get_mut(
+        &mut self,
+        table_index: DefinedTableIndex,
+        index: u32,
+    ) -> Option<&mut VMCallerCheckedAnyfunc> {
+        self.instance_mut().table_get_mut(table_index, index)
     }
 }
 
@@ -1184,6 +1260,7 @@ fn initialize_globals(instance: &mut Instance) {
             GlobalInit::I64Const(x) => *unsafe { (*to).as_i64_mut() } = x,
             GlobalInit::F32Const(x) => *unsafe { (*to).as_f32_bits_mut() } = x,
             GlobalInit::F64Const(x) => *unsafe { (*to).as_f64_bits_mut() } = x,
+            GlobalInit::V128Const(x) => *unsafe { (*to).as_u128_bits_mut() } = x.0,
             GlobalInit::GetGlobal(x) => {
                 let from = if let Some(def_x) = module.defined_global_index(x) {
                     instance.global_mut(def_x)

@@ -1,8 +1,7 @@
 [package]
 name = "wasmtime-wasi-c"
-version = "0.0.0"
+version = "0.2.0"
 authors = ["The Cranelift Project Developers"]
-publish = false
 description = "WASI API support for Wasmtime"
 categories = ["wasm"]
 repository = "https://github.com/CraneStation/wasmtime"
@@ -26,13 +25,13 @@ cranelift-entity = { path = "../../cranelift/cranelift-entity", features = ["ena
 # cranelift-wasm = { version = "0.36.0", features = ["enable-serde"] }
 cranelift-wasm = { path = "../../cranelift/cranelift-wasm", features = ["enable-serde"] }
 
-target-lexicon = "0.4.0"
-log = { version = "0.4.6", default-features = false }
-libc = "0.2.50"
+target-lexicon = "0.8.1"
+log = { version = "0.4.8", default-features = false }
+libc = "0.2.60"
 
 [build-dependencies]
 cmake = "0.1.35"
-bindgen = "0.50.0"
+bindgen = "0.51.0"
 
 [badges]
 maintenance = { status = "experimental" }

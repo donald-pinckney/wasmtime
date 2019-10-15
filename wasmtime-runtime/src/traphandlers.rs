@@ -1,28 +1,39 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::signalhandlers::jmp_buf;
+use crate::trap_registry::get_trap_registry;
+use crate::trap_registry::TrapDescription;
 use crate::vmcontext::{VMContext, VMFunctionBody};
-use core::cell::{Cell, RefCell};
-use core::mem;
+use alloc::string::{String, ToString};
+use core::cell::Cell;
 use core::ptr;
-use libc::c_int;
-use std::string::String;
-use std::vec::Vec;
+use cranelift_codegen::ir;
 
-// Currently we uset setjmp/longjmp to unwind out of a signal handler
-// and back to the point where WebAssembly was called (via `call_wasm`).
-// This works because WebAssembly code currently does not use any EH
-// or require any cleanups, and we never unwind through non-wasm frames.
-// In the future, we'll likely replace this with fancier stack unwinding.
 extern "C" {
-    fn setjmp(env: *mut jmp_buf) -> c_int;
-    fn longjmp(env: *const jmp_buf, val: c_int) -> !;
+    fn WasmtimeCallTrampoline(
+        vmctx: *mut u8,
+        callee: *const VMFunctionBody,
+        values_vec: *mut u8,
+    ) -> i32;
+    fn WasmtimeCall(vmctx: *mut u8, callee: *const VMFunctionBody) -> i32;
 }
 
 thread_local! {
-    static TRAP_PC: Cell<*const u8> = Cell::new(ptr::null());
-    static JMP_BUFS: RefCell<Vec<jmp_buf>> = RefCell::new(Vec::new());
+    static RECORDED_TRAP: Cell<Option<TrapDescription>> = Cell::new(None);
+    static JMP_BUF: Cell<*const u8> = Cell::new(ptr::null());
+}
+
+/// Check if there is a trap at given PC
+#[doc(hidden)]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn CheckIfTrapAtAddress(_pc: *const u8) -> i8 {
+    // TODO: stack overflow can happen at any random time (i.e. in malloc() in memory.grow)
+    // and it's really hard to determine if the cause was stack overflow and if it happened
+    // in WebAssembly module.
+    // So, let's assume that any untrusted code called from WebAssembly doesn't trap.
+    // Then, if we have called some WebAssembly code, it means the trap is stack overflow.
+    JMP_BUF.with(|ptr| !ptr.get().is_null()) as i8
 }
 
 /// Record the Trap code and wasm bytecode offset in TLS somewhere
@@ -30,60 +41,73 @@ thread_local! {
 #[allow(non_snake_case)]
 #[no_mangle]
 pub extern "C" fn RecordTrap(pc: *const u8) {
-    // TODO: Look up the wasm bytecode offset and trap code and record them instead.
-    TRAP_PC.with(|data| data.set(pc));
+    // TODO: please see explanation in CheckIfTrapAtAddress.
+    let registry = get_trap_registry();
+    let trap_desc = registry
+        .get_trap(pc as usize)
+        .unwrap_or_else(|| TrapDescription {
+            source_loc: ir::SourceLoc::default(),
+            trap_code: ir::TrapCode::StackOverflow,
+        });
+    RECORDED_TRAP.with(|data| {
+        assert_eq!(
+            data.get(),
+            None,
+            "Only one trap per thread can be recorded at a moment!"
+        );
+        data.set(Some(trap_desc))
+    });
 }
 
-/// Initiate an unwind.
 #[doc(hidden)]
 #[allow(non_snake_case)]
 #[no_mangle]
-pub extern "C" fn Unwind() {
-    JMP_BUFS.with(|bufs| {
-        let buf = bufs.borrow_mut().pop().unwrap();
-        unsafe { longjmp(&buf, 1) };
-    })
+pub extern "C" fn EnterScope(ptr: *const u8) -> *const u8 {
+    JMP_BUF.with(|buf| buf.replace(ptr))
 }
 
-/// A simple guard to ensure that `JMP_BUFS` is reset when we're done.
-struct ScopeGuard {
-    orig_num_bufs: usize,
+#[doc(hidden)]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn GetScope() -> *const u8 {
+    JMP_BUF.with(|buf| buf.get())
 }
 
-impl ScopeGuard {
-    fn new() -> Self {
-        assert_eq!(
-            TRAP_PC.with(Cell::get),
-            ptr::null(),
-            "unfinished trap detected"
-        );
-        Self {
-            orig_num_bufs: JMP_BUFS.with(|bufs| bufs.borrow().len()),
-        }
+#[doc(hidden)]
+#[allow(non_snake_case)]
+#[no_mangle]
+pub extern "C" fn LeaveScope(ptr: *const u8) {
+    JMP_BUF.with(|buf| buf.set(ptr))
+}
+
+fn trap_message() -> String {
+    let trap_desc = RECORDED_TRAP
+        .with(|data| data.replace(None))
+        .expect("trap_message must be called after trap occurred");
+
+    format!(
+        "wasm trap: {}, source location: {}",
+        trap_code_to_expected_string(trap_desc.trap_code),
+        trap_desc.source_loc,
+    )
+}
+
+fn trap_code_to_expected_string(trap_code: ir::TrapCode) -> String {
+    use ir::TrapCode::*;
+    match trap_code {
+        StackOverflow => "call stack exhausted".to_string(),
+        HeapOutOfBounds => "out of bounds memory access".to_string(),
+        TableOutOfBounds => "undefined element".to_string(),
+        OutOfBounds => "out of bounds".to_string(), // Note: not covered by the test suite
+        IndirectCallToNull => "uninitialized element".to_string(),
+        BadSignature => "indirect call type mismatch".to_string(),
+        IntegerOverflow => "integer overflow".to_string(),
+        IntegerDivisionByZero => "integer divide by zero".to_string(),
+        BadConversionToInteger => "invalid conversion to integer".to_string(),
+        UnreachableCodeReached => "unreachable".to_string(),
+        Interrupt => "interrupt".to_string(), // Note: not covered by the test suite
+        User(x) => format!("user trap {}", x), // Note: not covered by the test suite
     }
-}
-
-impl Drop for ScopeGuard {
-    fn drop(&mut self) {
-        let orig_num_bufs = self.orig_num_bufs;
-        JMP_BUFS.with(|bufs| {
-            bufs.borrow_mut()
-                .resize(orig_num_bufs, unsafe { mem::zeroed() })
-        });
-    }
-}
-
-fn trap_message(_vmctx: *mut VMContext) -> String {
-    let pc = TRAP_PC.with(|data| data.replace(ptr::null()));
-
-    // TODO: Record trap metadata in the VMContext, and look up the
-    // pc to obtain the TrapCode and SourceLoc.
-
-    format!("wasm trap at {:?}", pc)
-}
-
-fn push_jmp_buf(buf: jmp_buf) {
-    JMP_BUFS.with(|bufs| bufs.borrow_mut().push(buf));
 }
 
 /// Call the wasm function pointed to by `callee`. `values_vec` points to
@@ -95,21 +119,11 @@ pub unsafe extern "C" fn wasmtime_call_trampoline(
     callee: *const VMFunctionBody,
     values_vec: *mut u8,
 ) -> Result<(), String> {
-    // Reset JMP_BUFS if the stack is unwound through this point.
-    let _guard = ScopeGuard::new();
-
-    // Set a setjmp catch point.
-    let mut buf = mem::uninitialized();
-    if setjmp(&mut buf) != 0 {
-        return Err(trap_message(vmctx));
+    if WasmtimeCallTrampoline(vmctx as *mut u8, callee, values_vec) == 0 {
+        Err(trap_message())
+    } else {
+        Ok(())
     }
-    push_jmp_buf(buf);
-
-    // Call the function!
-    let func: fn(*mut VMContext, *mut u8) = mem::transmute(callee);
-    func(vmctx, values_vec);
-
-    Ok(())
 }
 
 /// Call the wasm function pointed to by `callee`, which has no arguments or
@@ -119,19 +133,9 @@ pub unsafe extern "C" fn wasmtime_call(
     vmctx: *mut VMContext,
     callee: *const VMFunctionBody,
 ) -> Result<(), String> {
-    // Reset JMP_BUFS if the stack is unwound through this point.
-    let _guard = ScopeGuard::new();
-
-    // Set a setjmp catch point.
-    let mut buf = mem::uninitialized();
-    if setjmp(&mut buf) != 0 {
-        return Err(trap_message(vmctx));
+    if WasmtimeCall(vmctx as *mut u8, callee) == 0 {
+        Err(trap_message())
+    } else {
+        Ok(())
     }
-    push_jmp_buf(buf);
-
-    // Call the function!
-    let func: fn(*mut VMContext) = mem::transmute(callee);
-    func(vmctx);
-
-    Ok(())
 }

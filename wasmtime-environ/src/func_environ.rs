@@ -1,6 +1,7 @@
 use crate::module::{MemoryPlan, MemoryStyle, Module, TableStyle};
 use crate::vmoffsets::VMOffsets;
 use crate::WASM_PAGE_SIZE;
+use alloc::vec::Vec;
 use core::clone::Clone;
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
@@ -17,7 +18,6 @@ use cranelift_wasm::{
 };
 #[cfg(feature = "lightbeam")]
 use cranelift_wasm::{DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex};
-use std::vec::Vec;
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -239,13 +239,13 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     fn defined_func_index(&self, func_index: u32) -> Option<u32> {
         self.module
             .defined_func_index(FuncIndex::from_u32(func_index))
-            .map(|i| i.as_u32())
+            .map(DefinedFuncIndex::as_u32)
     }
 
     fn defined_global_index(&self, global_index: u32) -> Option<u32> {
         self.module
             .defined_global_index(GlobalIndex::from_u32(global_index))
-            .map(|i| i.as_u32())
+            .map(DefinedGlobalIndex::as_u32)
     }
 
     fn global_type(&self, global_index: u32) -> &Self::GlobalType {
@@ -263,13 +263,13 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     fn defined_table_index(&self, table_index: u32) -> Option<u32> {
         self.module
             .defined_table_index(TableIndex::from_u32(table_index))
-            .map(|i| i.as_u32())
+            .map(DefinedTableIndex::as_u32)
     }
 
     fn defined_memory_index(&self, memory_index: u32) -> Option<u32> {
         self.module
             .defined_memory_index(MemoryIndex::from_u32(memory_index))
-            .map(|i| i.as_u32())
+            .map(DefinedMemoryIndex::as_u32)
     }
 
     fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {
@@ -569,6 +569,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
 
+        // Dereference table_entry_addr to get the function address.
+        let mem_flags = ir::MemFlags::trusted();
+        let func_addr = pos.ins().load(
+            pointer_type,
+            mem_flags,
+            table_entry_addr,
+            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
+        );
+
+        // Check whether `func_addr` is null.
+        pos.ins().trapz(func_addr, ir::TrapCode::IndirectCallToNull);
+
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
             TableStyle::CallerChecksSignature => {
@@ -598,15 +610,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 pos.ins().trapz(cmp, ir::TrapCode::BadSignature);
             }
         }
-
-        // Dereference table_entry_addr to get the function address.
-        let mem_flags = ir::MemFlags::trusted();
-        let func_addr = pos.ins().load(
-            pointer_type,
-            mem_flags,
-            table_entry_addr,
-            i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
-        );
 
         let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
 

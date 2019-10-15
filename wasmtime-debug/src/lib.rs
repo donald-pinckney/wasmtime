@@ -1,15 +1,24 @@
 //! Debug utils for WebAssembly using Cranelift.
+
+#![allow(clippy::cast_ptr_alignment)]
+
+use alloc::string::String;
+use alloc::vec::Vec;
 use cranelift_codegen::isa::TargetFrontendConfig;
 use faerie::{Artifact, Decl};
 use failure::Error;
 use target_lexicon::{BinaryFormat, Triple};
-use wasmtime_environ::ModuleAddressMap;
+use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{hash_map, HashMap, HashSet};
+#[cfg(feature = "std")]
+use std::collections::{hash_map, HashMap, HashSet};
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
-pub use crate::transform::{transform_dwarf, ModuleVmctxInfo, ValueLabelsRanges};
+pub use crate::transform::transform_dwarf;
 pub use crate::write_debuginfo::{emit_dwarf, ResolvedSymbol, SymbolResolver};
 
-mod address_transform;
 mod gc;
 mod read_debuginfo;
 mod transform;
@@ -17,6 +26,7 @@ mod write_debuginfo;
 
 #[macro_use]
 extern crate failure_derive;
+extern crate alloc;
 
 struct FunctionRelocResolver {}
 impl SymbolResolver for FunctionRelocResolver {
@@ -28,12 +38,14 @@ impl SymbolResolver for FunctionRelocResolver {
 
 pub fn emit_debugsections(
     obj: &mut Artifact,
+    vmctx_info: &ModuleVmctxInfo,
     target_config: &TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
     at: &ModuleAddressMap,
+    ranges: &ValueLabelsRanges,
 ) -> Result<(), Error> {
     let resolver = FunctionRelocResolver {};
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
+    let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
     emit_dwarf(obj, dwarf, &resolver)?;
     Ok(())
 }
@@ -53,27 +65,29 @@ pub fn emit_debugsections_image(
     triple: Triple,
     target_config: &TargetFrontendConfig,
     debuginfo_data: &DebugInfoData,
+    vmctx_info: &ModuleVmctxInfo,
     at: &ModuleAddressMap,
-    funcs: &Vec<(*const u8, usize)>,
+    ranges: &ValueLabelsRanges,
+    funcs: &[(*const u8, usize)],
 ) -> Result<Vec<u8>, Error> {
-    let ref func_offsets = funcs
+    let func_offsets = &funcs
         .iter()
         .map(|(ptr, _)| *ptr as u64)
         .collect::<Vec<u64>>();
     let mut obj = Artifact::new(triple, String::from("module"));
     let resolver = ImageRelocResolver { func_offsets };
-    let dwarf = transform_dwarf(target_config, debuginfo_data, at)?;
+    let dwarf = transform_dwarf(target_config, debuginfo_data, at, vmctx_info, ranges)?;
 
     // Assuming all functions in the same code block, looking min/max of its range.
     assert!(funcs.len() > 0);
     let mut segment_body: (usize, usize) = (!0, 0);
-    for (body_ptr, body_len) in funcs.iter() {
-        segment_body.0 = ::std::cmp::min(segment_body.0, *body_ptr as usize);
-        segment_body.1 = ::std::cmp::max(segment_body.1, *body_ptr as usize + body_len);
+    for (body_ptr, body_len) in funcs {
+        segment_body.0 = ::core::cmp::min(segment_body.0, *body_ptr as usize);
+        segment_body.1 = ::core::cmp::max(segment_body.1, *body_ptr as usize + body_len);
     }
     let segment_body = (segment_body.0 as *const u8, segment_body.1 - segment_body.0);
 
-    let body = unsafe { ::std::slice::from_raw_parts(segment_body.0, segment_body.1) };
+    let body = unsafe { ::core::slice::from_raw_parts(segment_body.0, segment_body.1) };
     obj.declare_with("all", Decl::function(), body.to_vec())?;
 
     emit_dwarf(&mut obj, dwarf, &resolver)?;
@@ -156,8 +170,7 @@ fn convert_faerie_elf_to_loadable_file(bytes: &mut Vec<u8>, code_ptr: *const u8)
     // LLDB wants segment with virtual address set, placing them at the end of ELF.
     let ph_off = bytes.len();
     if let Some((sh_offset, v_offset, sh_size)) = segment {
-        let mut segment = Vec::with_capacity(0x38);
-        segment.resize(0x38, 0);
+        let segment = vec![0; 0x38];
         unsafe {
             *(segment.as_ptr() as *mut u32) = /* PT_LOAD */ 0x1;
             *(segment.as_ptr().offset(0x8) as *mut u64) = sh_offset;

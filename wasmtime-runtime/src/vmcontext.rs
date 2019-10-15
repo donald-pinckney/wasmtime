@@ -217,7 +217,7 @@ pub struct VMTableDefinition {
     pub base: *mut u8,
 
     /// The current number of elements in the table.
-    pub current_elements: usize,
+    pub current_elements: u32,
 }
 
 #[cfg(test)]
@@ -250,9 +250,9 @@ mod test_vmtable_definition {
 /// TODO: Pack the globals more densely, rather than using the same size
 /// for every type.
 #[derive(Debug, Copy, Clone)]
-#[repr(C, align(8))]
+#[repr(C, align(16))]
 pub struct VMGlobalDefinition {
-    storage: [u8; 8],
+    storage: [u8; 16],
     // If more elements are added here, remember to add offset_of tests below!
 }
 
@@ -268,6 +268,7 @@ mod test_vmglobal_definition {
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<i64>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
     }
 
     #[test]
@@ -279,12 +280,19 @@ mod test_vmglobal_definition {
             usize::from(offsets.size_of_vmglobal_definition())
         );
     }
+
+    #[test]
+    fn check_vmglobal_begins_aligned() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(offsets.vmctx_globals_begin() % 16, 0);
+    }
 }
 
 impl VMGlobalDefinition {
     /// Construct a `VMGlobalDefinition`.
     pub fn new() -> Self {
-        Self { storage: [0; 8] }
+        Self { storage: [0; 16] }
     }
 
     /// Return a reference to the value as an i32.
@@ -382,12 +390,36 @@ impl VMGlobalDefinition {
     pub unsafe fn as_f64_bits_mut(&mut self) -> &mut u64 {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut u64)
     }
+
+    /// Return a reference to the value as an u128.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u128(&self) -> &u128 {
+        &*(self.storage.as_ref().as_ptr() as *const u128)
+    }
+
+    /// Return a mutable reference to the value as an u128.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u128_mut(&mut self) -> &mut u128 {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut u128)
+    }
+
+    /// Return a reference to the value as u128 bits.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u128_bits(&self) -> &[u8; 16] {
+        &*(self.storage.as_ref().as_ptr() as *const [u8; 16])
+    }
+
+    /// Return a mutable reference to the value as u128 bits.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_u128_bits_mut(&mut self) -> &mut [u8; 16] {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut [u8; 16])
+    }
 }
 
 /// An index into the shared signature registry, usable for checking signatures
 /// at indirect calls.
 #[repr(C)]
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub struct VMSharedSignatureIndex(u32);
 
 #[cfg(test)]
@@ -418,7 +450,13 @@ mod test_vmshared_signature_index {
 impl VMSharedSignatureIndex {
     /// Create a new `VMSharedSignatureIndex`.
     pub fn new(value: u32) -> Self {
-        VMSharedSignatureIndex(value)
+        Self(value)
+    }
+}
+
+impl Default for VMSharedSignatureIndex {
+    fn default() -> Self {
+        Self::new(u32::MAX)
     }
 }
 
@@ -428,8 +466,11 @@ impl VMSharedSignatureIndex {
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct VMCallerCheckedAnyfunc {
+    /// Function body.
     pub func_ptr: *const VMFunctionBody,
+    /// Function signature id.
     pub type_index: VMSharedSignatureIndex,
+    /// Function `VMContext`.
     pub vmctx: *mut VMContext,
     // If more elements are added here, remember to add offset_of tests below!
 }
@@ -467,7 +508,7 @@ impl Default for VMCallerCheckedAnyfunc {
     fn default() -> Self {
         Self {
             func_ptr: ptr::null_mut(),
-            type_index: VMSharedSignatureIndex::new(u32::MAX),
+            type_index: Default::default(),
             vmctx: ptr::null_mut(),
         }
     }
@@ -500,6 +541,42 @@ impl VMBuiltinFunctionsArray {
     }
 }
 
+/// The storage for a WebAssembly invocation argument
+///
+/// TODO: These could be packed more densely, rather than using the same size for every type.
+#[derive(Debug, Copy, Clone)]
+#[repr(C, align(16))]
+pub struct VMInvokeArgument([u8; 16]);
+
+#[cfg(test)]
+mod test_vm_invoke_argument {
+    use super::VMInvokeArgument;
+    use core::mem::{align_of, size_of};
+    use wasmtime_environ::{Module, VMOffsets};
+
+    #[test]
+    fn check_vm_invoke_argument_alignment() {
+        assert_eq!(align_of::<VMInvokeArgument>(), 16);
+    }
+
+    #[test]
+    fn check_vmglobal_definition_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        assert_eq!(
+            size_of::<VMInvokeArgument>(),
+            usize::from(offsets.size_of_vmglobal_definition())
+        );
+    }
+}
+
+impl VMInvokeArgument {
+    /// Create a new invocation argument filled with zeroes
+    pub fn new() -> Self {
+        Self([0; 16])
+    }
+}
+
 /// The VM "context", which is pointed to by the `vmctx` arg in Cranelift.
 /// This has information about globals, memories, tables, and other runtime
 /// state associated with the current instance.
@@ -527,7 +604,7 @@ impl VMContext {
     ///
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
-    pub unsafe fn host_state(&mut self) -> &mut Any {
+    pub unsafe fn host_state(&mut self) -> &mut dyn Any {
         self.instance().host_state()
     }
 

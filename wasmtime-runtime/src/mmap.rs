@@ -1,13 +1,14 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::ptr;
 use core::slice;
 use errno;
+#[cfg(not(target_os = "windows"))]
 use libc;
 use region;
-use std::string::{String, ToString};
-use std::vec::Vec;
 
 /// Round `size` up to the nearest multiple of `page_size`.
 fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
@@ -187,7 +188,7 @@ impl Mmap {
     /// `self`'s reserved memory.
     #[cfg(target_os = "windows")]
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<(), String> {
-        use core::ffi::c_void;
+        use winapi::ctypes::c_void;
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, PAGE_READWRITE};
         let page_size = region::page::size();
@@ -251,9 +252,10 @@ impl Drop for Mmap {
     #[cfg(target_os = "windows")]
     fn drop(&mut self) {
         if self.len != 0 {
+            use winapi::ctypes::c_void;
             use winapi::um::memoryapi::VirtualFree;
             use winapi::um::winnt::MEM_RELEASE;
-            let r = unsafe { VirtualFree(self.ptr as *mut libc::c_void, self.len, MEM_RELEASE) };
+            let r = unsafe { VirtualFree(self.ptr as *mut c_void, self.len, MEM_RELEASE) };
             assert_eq!(r, 0);
         }
     }

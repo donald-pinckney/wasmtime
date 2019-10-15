@@ -1,18 +1,18 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::address_map::ModuleAddressMap;
+use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::module;
 use crate::module_environ::FunctionBodyData;
+use alloc::vec::Vec;
 use cranelift_codegen::{binemit, ir, isa, CodegenError};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
-use std::vec::Vec;
 
 /// Compiled machine code: body and jump table offsets.
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct CodeAndJTOffsets {
     /// The function body.
     pub body: Vec<u8>,
@@ -24,7 +24,7 @@ pub struct CodeAndJTOffsets {
 type Functions = PrimaryMap<DefinedFuncIndex, CodeAndJTOffsets>;
 
 /// The result of compiling a WebAssembly module's functions.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct Compilation {
     /// Compiled machine code for the function bodies.
     functions: Functions,
@@ -95,7 +95,7 @@ impl<'a> Iterator for Iter<'a> {
 }
 
 /// A record of a relocation to perform.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Relocation {
     /// The relocation code.
     pub reloc: binemit::Reloc,
@@ -108,7 +108,7 @@ pub struct Relocation {
 }
 
 /// Destination function. Can be either user function or some special one, like `memory.grow`.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum RelocationTarget {
     /// The user function index.
     UserFunc(FuncIndex),
@@ -129,6 +129,20 @@ pub enum RelocationTarget {
 /// Relocations to apply to function bodies.
 pub type Relocations = PrimaryMap<DefinedFuncIndex, Vec<Relocation>>;
 
+/// Information about trap.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct TrapInformation {
+    /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
+    pub code_offset: binemit::CodeOffset,
+    /// Location of trapping instruction in WebAssembly binary module.
+    pub source_loc: ir::SourceLoc,
+    /// Code of the trap.
+    pub trap_code: ir::TrapCode,
+}
+
+/// Information about traps associated with the functions where the traps are placed.
+pub type Traps = PrimaryMap<DefinedFuncIndex, Vec<TrapInformation>>;
+
 /// An error while compiling WebAssembly to machine code.
 #[derive(Fail, Debug)]
 pub enum CompileError {
@@ -139,6 +153,10 @@ pub enum CompileError {
     /// A compilation error occured.
     #[fail(display = "Compilation error: {}", _0)]
     Codegen(CodegenError),
+
+    /// A compilation error occured.
+    #[fail(display = "Debug info is not supported with this configuration")]
+    DebugInfoNotSupported,
 }
 
 /// An implementation of a compiler from parsed WebAssembly module to native code.
@@ -149,5 +167,15 @@ pub trait Compiler {
         function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
         isa: &dyn isa::TargetIsa,
         generate_debug_info: bool,
-    ) -> Result<(Compilation, Relocations, ModuleAddressMap), CompileError>;
+    ) -> Result<
+        (
+            Compilation,
+            Relocations,
+            ModuleAddressMap,
+            ValueLabelsRanges,
+            PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+            Traps,
+        ),
+        CompileError,
+    >;
 }

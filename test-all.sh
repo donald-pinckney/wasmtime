@@ -52,13 +52,21 @@ banner "Rust unit tests"
 #RUST_BACKTRACE=1 cargo test --all
 RUST_BACKTRACE=1 cargo test \
   --package wasmtime \
+  --package wasmtime-api \
   --package wasmtime-wasi \
   --package wasmtime-wast \
   --package wasmtime-debug \
   --package wasmtime-environ \
   --package wasmtime-runtime \
   --package wasmtime-jit \
-  --package wasmtime-obj
+  --package wasmtime-interface-types \
+  --package wasmtime-obj \
+
+# Test wasmtime-wasi-c, which doesn't support Windows.
+if [ "${OS:-Not}" != "Windows_NT" ]; then
+    RUST_BACKTRACE=1 cargo test \
+      --package wasmtime-wasi-c
+fi
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"
@@ -82,7 +90,13 @@ if rustup toolchain list | grep -q nightly; then
 
     # Nightly is available, so also run lightbeam's tests, which we
     # skipped earlier.
-    cargo +nightly test --package lightbeam
+    cargo +nightly test --features lightbeam --package lightbeam
+    cargo +nightly test --features lightbeam
+
+    # Also run wasmtime-py and wasmtime-rust's tests.
+    RUST_BACKTRACE=1 cargo +nightly test \
+      --package wasmtime-py \
+      --package wasmtime-rust
 else
     echo "nightly toolchain not found, skipping fuzz target integration test"
 fi

@@ -1,6 +1,11 @@
 //! Data structures for representing decoded wasm modules.
 
+use crate::module_environ::FunctionBodyData;
 use crate::tunables::Tunables;
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::hash::{Hash, Hasher};
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
@@ -8,12 +13,9 @@ use cranelift_wasm::{
     GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
 };
 use indexmap::IndexMap;
-use std::boxed::Box;
-use std::string::String;
-use std::vec::Vec;
 
 /// A WebAssembly table initializer.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct TableElements {
     /// The index of a table to initialize.
     pub table_index: TableIndex,
@@ -26,7 +28,7 @@ pub struct TableElements {
 }
 
 /// An entity to export.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Export {
     /// Function export.
     Function(FuncIndex),
@@ -39,7 +41,7 @@ pub enum Export {
 }
 
 /// Implemenation styles for WebAssembly linear memory.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum MemoryStyle {
     /// The actual memory can be resized and moved.
     Dynamic,
@@ -59,7 +61,7 @@ impl MemoryStyle {
                 // it static.
                 assert!(tunables.static_memory_bound >= memory.minimum);
                 return (
-                    MemoryStyle::Static {
+                    Self::Static {
                         bound: tunables.static_memory_bound,
                     },
                     tunables.static_memory_offset_guard_size,
@@ -68,16 +70,13 @@ impl MemoryStyle {
         }
 
         // Otherwise, make it dynamic.
-        (
-            MemoryStyle::Dynamic,
-            tunables.dynamic_memory_offset_guard_size,
-        )
+        (Self::Dynamic, tunables.dynamic_memory_offset_guard_size)
     }
 }
 
 /// A WebAssembly linear memory description along with our chosen style for
 /// implementing it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct MemoryPlan {
     /// The WebAssembly linear memory description.
     pub memory: Memory,
@@ -100,7 +99,7 @@ impl MemoryPlan {
 }
 
 /// Implemenation styles for WebAssembly tables.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum TableStyle {
     /// Signatures are stored in the table and checked in the caller.
     CallerChecksSignature,
@@ -109,13 +108,13 @@ pub enum TableStyle {
 impl TableStyle {
     /// Decide on an implementation style for the given `Table`.
     pub fn for_table(_table: Table, _tunables: &Tunables) -> Self {
-        TableStyle::CallerChecksSignature
+        Self::CallerChecksSignature
     }
 }
 
 /// A WebAssembly table description along with our chosen style for
 /// implementing it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct TablePlan {
     /// The WebAssembly table description.
     pub table: cranelift_wasm::Table,
@@ -133,6 +132,7 @@ impl TablePlan {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
+// WARNING: when modifying, make sure that `hash_for_cache` is still valid!
 #[derive(Debug)]
 pub struct Module {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
@@ -170,10 +170,6 @@ pub struct Module {
 
     /// WebAssembly table initializers.
     pub table_elements: Vec<TableElements>,
-
-    /// Hash of the source wasm code if this module is not synthesized.
-    /// TODO: this is temporary workaround. Will be replaced with derive macro.
-    pub hash: Option<[u8; 32]>,
 }
 
 impl Module {
@@ -192,7 +188,6 @@ impl Module {
             exports: IndexMap::new(),
             start_func: None,
             table_elements: Vec::new(),
-            hash: None,
         }
     }
 
@@ -282,5 +277,30 @@ impl Module {
     /// Test whether the given global index is for an imported global.
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.imported_globals.len()
+    }
+
+    /// Computes hash of the module for the purpose of caching.
+    pub fn hash_for_cache<'data, H>(
+        &self,
+        function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+        state: &mut H,
+    ) where
+        H: Hasher,
+    {
+        // There's no need to cache names (strings), start function
+        // and data initializers (for both memory and tables)
+        self.signatures.hash(state);
+        self.functions.hash(state);
+        self.table_plans.hash(state);
+        self.memory_plans.hash(state);
+        self.globals.hash(state);
+        // IndexMap (self.export) iterates over values in order of item inserts
+        // Let's actually sort the values.
+        let mut exports = self.exports.values().collect::<Vec<_>>();
+        exports.sort();
+        for val in exports {
+            val.hash(state);
+        }
+        function_body_inputs.hash(state);
     }
 }
