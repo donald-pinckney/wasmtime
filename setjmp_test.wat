@@ -21,6 +21,9 @@
         ;; ;; (i32.const 0)
         ;; drop
 
+
+        (longjmp (i32.const 56) (i32.const 59))
+
         (i32.store (i32.const 9) (i32.add 
         							(i32.const 65) 
         							(i32.wrap/i64 (setjmp (i32.const 20))  )   ;; (setjmp (i32.const 0))

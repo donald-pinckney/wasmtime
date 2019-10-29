@@ -124,6 +124,8 @@ pub enum RelocationTarget {
     ImportedMemory32Size,
     /// Stuff
     Setjmp,
+    /// Stuff
+    Longjmp,
     /// Jump table index.
     JumpTable(FuncIndex, ir::JumpTable),
 }

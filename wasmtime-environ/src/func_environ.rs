@@ -53,6 +53,11 @@ pub fn get_setjmp_name() -> ir::ExternalName {
     ir::ExternalName::user(1, 4)
 }
 
+/// Stuff
+pub fn get_longjmp_name() -> ir::ExternalName {
+    ir::ExternalName::user(1, 5)
+}
+
 /// An index type for builtin functions.
 pub struct BuiltinFunctionIndex(u32);
 
@@ -77,9 +82,13 @@ impl BuiltinFunctionIndex {
     pub const fn get_setjmp_index() -> Self {
         Self(4)
     }
+    /// Stuff
+    pub const fn get_longjmp_index() -> Self {
+        Self(5)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        5
+        6
     }
 
     /// Return the index as an u32 number.
@@ -110,6 +119,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// Stuff
     setjmp_sig: Option<ir::SigRef>,
 
+    /// Stuff
+    longjmp_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -123,6 +135,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memory32_size_sig: None,
             memory_grow_sig: None,
             setjmp_sig: None,
+            longjmp_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -194,6 +207,22 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         sig
     }
 
+    fn get_longjmp_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.longjmp_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    // AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    AbiParam::new(I64),
+                    AbiParam::new(I64),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.longjmp_sig = Some(sig);
+        sig
+    }
+
 
     fn get_setjmp_func(
         &mut self,
@@ -212,6 +241,28 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.get_setjmp_sig(func),
                 self.module.defined_memory_index(index).unwrap().index(),
                 BuiltinFunctionIndex::get_setjmp_index(),
+            )
+        }
+    }
+
+
+    fn get_longjmp_func(
+        &mut self,
+        func: &mut Function,
+        index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        if self.module.is_imported_memory(index) {
+            (
+                unimplemented!()
+                // self.get_setjmp_sig(func),
+                // index.index(),
+                // BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+            )
+        } else {
+            (
+                self.get_longjmp_sig(func),
+                self.module.defined_memory_index(index).unwrap().index(),
+                BuiltinFunctionIndex::get_longjmp_index(),
             )
         }
     }
@@ -749,6 +800,34 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Ok(addr)
     }
+
+
+    fn translate_longjmp(
+        &mut self,
+        mut pos: FuncCursor<'_>,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        addr: ir::Value,
+        offset: i32,
+        arg: ir::Value
+    ) -> WasmResult<ir::Inst> {
+        let (func_sig, index_arg, func_idx) = self.get_longjmp_func(&mut pos.func, index);
+
+        // let memory_index = pos.ins().iconst(I32, index_arg as i64);
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        println!("addr: {:?}, addr_type: {:}", addr, pos.func.dfg.value_type(addr));
+
+        let call_inst = pos
+            .ins()
+            .call_indirect(func_sig, func_addr, &[addr, arg]);
+        
+        Ok(call_inst)
+        // Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+
+        // Ok(addr)
+    }
+
 
     fn translate_memory_grow(
         &mut self,

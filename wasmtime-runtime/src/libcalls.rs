@@ -158,3 +158,20 @@ pub unsafe extern "C" fn wasmtime_setjmp(addr: *mut u64) -> u64 {
     println!("end wasmtime_setjmp: r = {}", r);
     r
 }
+
+
+/// Stuff
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_longjmp(addr: *mut u64, arg: u64) {
+
+    println!("LONGJUMP! addr = {:?}, arg = {}", addr, arg);
+
+    // println!("start wasmtime_setjmp, addr = {:?}", addr);
+    // let r = setjmp(addr);
+    // // r
+    // // 5
+
+    // // let r = *addr;
+    // println!("end wasmtime_setjmp: r = {}", r);
+    // r
+}
