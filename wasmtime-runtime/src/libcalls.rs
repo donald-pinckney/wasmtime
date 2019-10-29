@@ -137,3 +137,24 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
 
     instance.imported_memory_size(memory_index)
 }
+
+
+extern "C" {
+    fn setjmp(input: *mut u64) -> u64;
+}
+
+/// Stuff
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_setjmp(addr: *mut u64) -> u64 {
+
+    
+
+    println!("start wasmtime_setjmp, addr = {:?}", addr);
+    let r = setjmp(addr);
+    // r
+    // 5
+
+    // let r = *addr;
+    println!("end wasmtime_setjmp: r = {}", r);
+    r
+}
