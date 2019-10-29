@@ -27,7 +27,8 @@ cranelift-codegen = { path = "../../cranelift/cranelift-codegen" }
 
 multi_mut = "0.1"
 either = "1.5"
-wabt = "0.7"
+# wabt = "0.7"
+wabt = { path = "../../wabt-rs" }
 lazy_static = "1.2"
 quickcheck = "0.7"
 typemap = "0.3"
