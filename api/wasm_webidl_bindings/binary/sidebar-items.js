@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["decode","Decode the Web IDL bindings custom section data from the given input stream."],["encode","Encode the given Web IDL bindings section into the given write-able."],["on_parse","Callback for `walrus::ModuleConfig::on_parse` to parse the webidl bindings custom section if one is found."]]});

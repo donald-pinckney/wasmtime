@@ -1,0 +1,1 @@
+initSidebarItems({"attr":[["wasi_common_cbindgen",""]]});
