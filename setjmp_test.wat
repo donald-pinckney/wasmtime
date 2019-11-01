@@ -13,15 +13,15 @@
 
     (func $main (export "_start")
         ;; Creating a new io vector within linear memory
-        (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
-        (i32.store (i32.const 4) (i32.const 12))  ;; iov.iov_len - The length of the 'hello world\n' string
+        ;; (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
+        ;; (i32.store (i32.const 4) (i32.const 12))  ;; iov.iov_len - The length of the 'hello world\n' string
 
         ;; ;; ;; (i32.const 1294967296)
-        (setjmp (i32.const 32))
+        (setjmp (i32.const 0))
         ;; ;; (i32.const 0)
         drop
 
-        (longjmp (i32.const 32) (i64.const 6))
+        (longjmp (i32.const 0) (i64.const 6))
 
 
         ;; ;; (longjmp (i32.const 56) (i64.const 59))
