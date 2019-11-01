@@ -141,6 +141,7 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
 
 extern "C" {
     fn setjmp(input: *mut u64) -> u64;
+    fn longjmp(addr: *mut u64, arg: u64);
 }
 
 /// Stuff
@@ -164,7 +165,13 @@ pub unsafe extern "C" fn wasmtime_setjmp(addr: *mut u64) -> u64 {
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_longjmp(addr: *mut u64, arg: u64) {
 
-    println!("LONGJUMP! addr = {:?}, arg = {}", addr, arg);
+    println!("start wasmtime_longjmp, addr = {:?}, arg = {}", addr, arg);
+
+
+    longjmp(addr, arg);
+
+    println!("[should not happen]: end wasmtime_longjmp, addr = {:?}, arg = {}", addr, arg);
+
 
     // println!("start wasmtime_setjmp, addr = {:?}", addr);
     // let r = setjmp(addr);

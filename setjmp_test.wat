@@ -16,26 +16,30 @@
         (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
         (i32.store (i32.const 4) (i32.const 12))  ;; iov.iov_len - The length of the 'hello world\n' string
 
-        ;; ;; (i32.const 1294967296)
-        ;; (setjmp (i32.const 20))
+        ;; ;; ;; (i32.const 1294967296)
+        (setjmp (i32.const 32))
         ;; ;; (i32.const 0)
-        ;; drop
+        drop
+
+        (longjmp (i32.const 32) (i64.const 6))
 
 
-        (longjmp (i32.const 56) (i32.const 59))
+        ;; ;; (longjmp (i32.const 56) (i64.const 59))
 
-        (i32.store (i32.const 9) (i32.add 
-        							(i32.const 65) 
-        							(i32.wrap/i64 (setjmp (i32.const 20))  )   ;; (setjmp (i32.const 0))
-        						)) ;; 65
+        ;; (i32.store (i32.const 9) (i32.add 
+        ;; 							(i32.const 65) 
+        ;; 							(i32.wrap/i64 (setjmp (i32.const 32))  )   ;; (setjmp (i32.const 0))
+        ;; 						)) ;; 65
 
-        (call $fd_write
-            (i32.const 1) ;; file_descriptor - 1 for stdout
-            (i32.const 0) ;; *iovs - The pointer to the iov array, which is stored at memory location 0
-            (i32.const 1) ;; iovs_len - We're printing 1 string stored in an iov - so one.
-            (i32.const 20) ;; nwritten - A place in memory to store the number of bytes writen
-        )
-        ;; (setjmp (i32.const 0))
-        drop ;; Discard the number of bytes written from the top the stack
+        ;; (call $fd_write
+        ;;     (i32.const 1) ;; file_descriptor - 1 for stdout
+        ;;     (i32.const 0) ;; *iovs - The pointer to the iov array, which is stored at memory location 0
+        ;;     (i32.const 1) ;; iovs_len - We're printing 1 string stored in an iov - so one.
+        ;;     (i32.const 20) ;; nwritten - A place in memory to store the number of bytes writen
+        ;; )
+        ;; ;; (setjmp (i32.const 0))
+        ;; drop ;; Discard the number of bytes written from the top the stack
+
+        ;; (longjmp (i32.const 32) (i64.const 5))
     )
 )
