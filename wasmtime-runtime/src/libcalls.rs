@@ -140,8 +140,8 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
 
 
 extern "C" {
-    fn setjmp(input: *mut u64) -> u64;
-    fn longjmp(addr: *mut u64, arg: u64);
+    pub fn setjmp(input: *mut u64) -> u64;
+    pub fn longjmp(addr: *mut u64, arg: u64);
 }
 
 /// Stuff
