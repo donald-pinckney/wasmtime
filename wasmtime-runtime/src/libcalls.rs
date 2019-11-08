@@ -140,45 +140,46 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
 
 
 extern "C" {
-    pub fn setjmp(input: *mut u64) -> u64;
+    pub fn __setjmp(input: *mut u64) -> u64;
     pub fn longjmp(addr: *mut u64, arg: u64);
+    pub fn control(fn_ptr: *mut u64, arg: *mut u64);
 }
 
-/// Stuff
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_setjmp(addr: *mut u64) -> u64 {
+// /// Stuff
+// #[no_mangle]
+// pub unsafe extern "C" fn wasmtime_setjmp(addr: *mut u64) -> u64 {
 
     
 
-    println!("start wasmtime_setjmp, addr = {:?}", addr);
-    let r = setjmp(addr);
-    // r
-    // 5
+//     println!("start wasmtime_setjmp, addr = {:?}", addr);
+//     let r = setjmp(addr);
+//     // r
+//     // 5
 
-    // let r = *addr;
-    println!("end wasmtime_setjmp: r = {}", r);
-    r
-}
-
-
-/// Stuff
-#[no_mangle]
-pub unsafe extern "C" fn wasmtime_longjmp(addr: *mut u64, arg: u64) {
-
-    println!("start wasmtime_longjmp, addr = {:?}, arg = {}", addr, arg);
+//     // let r = *addr;
+//     println!("end wasmtime_setjmp: r = {}", r);
+//     r
+// }
 
 
-    longjmp(addr, arg);
+// /// Stuff
+// #[no_mangle]
+// pub unsafe extern "C" fn wasmtime_longjmp(addr: *mut u64, arg: u64) {
 
-    println!("[should not happen]: end wasmtime_longjmp, addr = {:?}, arg = {}", addr, arg);
+//     println!("start wasmtime_longjmp, addr = {:?}, arg = {}", addr, arg);
 
 
-    // println!("start wasmtime_setjmp, addr = {:?}", addr);
-    // let r = setjmp(addr);
-    // // r
-    // // 5
+//     longjmp(addr, arg);
 
-    // // let r = *addr;
-    // println!("end wasmtime_setjmp: r = {}", r);
-    // r
-}
+//     println!("[should not happen]: end wasmtime_longjmp, addr = {:?}, arg = {}", addr, arg);
+
+
+//     // println!("start wasmtime_setjmp, addr = {:?}", addr);
+//     // let r = setjmp(addr);
+//     // // r
+//     // // 5
+
+//     // // let r = *addr;
+//     // println!("end wasmtime_setjmp: r = {}", r);
+//     // r
+// }

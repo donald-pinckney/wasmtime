@@ -320,7 +320,7 @@ fn relocate(
                 RelocationTarget::Memory32Size => wasmtime_memory32_size as usize,
                 RelocationTarget::ImportedMemory32Grow => wasmtime_imported_memory32_grow as usize,
                 RelocationTarget::ImportedMemory32Size => wasmtime_imported_memory32_size as usize,
-                RelocationTarget::Setjmp => setjmp as usize,
+                RelocationTarget::Setjmp => control as usize,
                 RelocationTarget::Longjmp => longjmp as usize,
                 RelocationTarget::LibCall(libcall) => {
                     use cranelift_codegen::ir::LibCall::*;

@@ -11,6 +11,16 @@
     ;; Note the trailing newline which is required for the text to appear
     (data (i32.const 8) "hello world\n")
 
+    (func $do_print (param $k i64)
+        (call $fd_write
+            (i32.const 1) ;; file_descriptor - 1 for stdout
+            (i32.const 0) ;; *iovs - The pointer to the iov array, which is stored at memory location 0
+            (i32.const 1) ;; iovs_len - We're printing 1 string stored in an iov - so one.
+            (i32.const 20) ;; nwritten - A place in memory to store the number of bytes writen
+        )
+        drop
+    )
+
     (func $main (export "_start")
         ;; Creating a new io vector within linear memory
         (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
@@ -30,13 +40,9 @@
         							(i32.wrap/i64 (setjmp (i32.const 32))  )   ;; (setjmp (i32.const 0))
         						)) ;; 65
 
-        (call $fd_write
-            (i32.const 1) ;; file_descriptor - 1 for stdout
-            (i32.const 0) ;; *iovs - The pointer to the iov array, which is stored at memory location 0
-            (i32.const 1) ;; iovs_len - We're printing 1 string stored in an iov - so one.
-            (i32.const 20) ;; nwritten - A place in memory to store the number of bytes writen
-        )
-        drop
+
+        i64.const 3
+        (call $do_print)
 
         (longjmp (i32.const 32) (i64.const 6))
 
