@@ -22,6 +22,16 @@ fn main() {
     build.compile("signalhandlers");
 
 
+    println!("cargo:rerun-if-changed=conts/conts.c");
+    let mut build = cc::Build::new();
+    build
+        .warnings(true)
+        .file("conts/conts.c");
+        // .file("conts/conts.s");
+    
+    build.compile("conts");
+
+
     println!("cargo:rerun-if-changed=src/continuations.s");
     let out_dir = env::var("OUT_DIR").unwrap();
     if !(Command::new("as").args(&["-o", &(out_dir.clone() + "/continuations.o"),

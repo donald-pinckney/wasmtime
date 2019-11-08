@@ -538,7 +538,7 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
             wasmtime_imported_memory32_size as usize;
         ptrs[BuiltinFunctionIndex::get_setjmp_index().index() as usize] = control as usize;
-        ptrs[BuiltinFunctionIndex::get_longjmp_index().index() as usize] = longjmp as usize;
+        ptrs[BuiltinFunctionIndex::get_longjmp_index().index() as usize] = restore as usize;
         Self { ptrs }
     }
 }
