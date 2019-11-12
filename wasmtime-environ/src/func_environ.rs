@@ -58,6 +58,16 @@ pub fn get_longjmp_name() -> ir::ExternalName {
     ir::ExternalName::user(1, 5)
 }
 
+/// Stuff
+pub fn get_control_name() -> ir::ExternalName {
+    ir::ExternalName::user(1, 6)
+}
+
+/// Stuff
+pub fn get_restore_name() -> ir::ExternalName {
+    ir::ExternalName::user(1, 7)
+}
+
 /// An index type for builtin functions.
 pub struct BuiltinFunctionIndex(u32);
 
@@ -86,9 +96,17 @@ impl BuiltinFunctionIndex {
     pub const fn get_longjmp_index() -> Self {
         Self(5)
     }
+    /// Stuff
+    pub const fn get_control_index() -> Self {
+        Self(6)
+    }
+    /// Stuff
+    pub const fn get_restore_index() -> Self {
+        Self(7)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        6
+        8
     }
 
     /// Return the index as an u32 number.
@@ -122,6 +140,12 @@ pub struct FuncEnvironment<'module_environment> {
     /// Stuff
     longjmp_sig: Option<ir::SigRef>,
 
+    /// Stuff
+    control_sig: Option<ir::SigRef>,
+
+    /// Stuff
+    restore_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -136,6 +160,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memory_grow_sig: None,
             setjmp_sig: None,
             longjmp_sig: None,
+            control_sig: None,
+            restore_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -223,6 +249,39 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         sig
     }
 
+    fn get_control_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.control_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    // AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                    AbiParam::new(I64),
+                    AbiParam::new(I64),
+                ],
+                returns: vec![AbiParam::new(I64)],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.control_sig = Some(sig);
+        sig
+    }
+
+    fn get_restore_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.restore_sig.unwrap_or_else(|| {
+            unimplemented!("wasmtime: get_restore_sig")
+            // func.import_signature(Signature {
+            //     params: vec![
+            //         // AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+            //         AbiParam::new(I64),
+            //         AbiParam::new(I64),
+            //     ],
+            //     returns: vec![],
+            //     call_conv: self.target_config.default_call_conv,
+            // })
+        });
+        self.restore_sig = Some(sig);
+        sig
+    }
+
 
     fn get_setjmp_func(
         &mut self,
@@ -263,6 +322,50 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.get_longjmp_sig(func),
                 self.module.defined_memory_index(index).unwrap().index(),
                 BuiltinFunctionIndex::get_longjmp_index(),
+            )
+        }
+    }
+
+
+    fn get_control_func(
+        &mut self,
+        func: &mut Function,
+        index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        if self.module.is_imported_memory(index) {
+            (
+                unimplemented!()
+                // self.get_setjmp_sig(func),
+                // index.index(),
+                // BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+            )
+        } else {
+            (
+                self.get_control_sig(func),
+                self.module.defined_memory_index(index).unwrap().index(),
+                BuiltinFunctionIndex::get_control_index(),
+            )
+        }
+    }
+
+
+    fn get_restore_func(
+        &mut self,
+        func: &mut Function,
+        index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        if self.module.is_imported_memory(index) {
+            (
+                unimplemented!()
+                // self.get_setjmp_sig(func),
+                // index.index(),
+                // BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+            )
+        } else {
+            (
+                self.get_restore_sig(func),
+                self.module.defined_memory_index(index).unwrap().index(),
+                BuiltinFunctionIndex::get_restore_index(),
             )
         }
     }
@@ -827,6 +930,107 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Ok(addr)
     }
+
+
+
+
+    fn translate_control(
+        &mut self,
+        mut pos: FuncCursor<'_>,
+        callee_index: FuncIndex,
+        callee: ir::FuncRef,
+        call_args: &[ir::Value],
+        mem_index: MemoryIndex,
+    ) -> WasmResult<ir::Inst> {
+
+        // assert_eq!(call_args.len(), 0);
+
+        let pointer_type = self.pointer_type();
+
+        let callee_addr = pos.ins().func_addr(pointer_type, callee);
+
+        let (func_sig, index_arg, func_idx) = self.get_control_func(&mut pos.func, mem_index);
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        // let callee_addr = pos.ins().iconst(I64, 0);
+        let arg = pos.ins().iconst(I64, 0);
+
+        let call_inst = pos
+            .ins()
+            .call_indirect(func_sig, func_addr, &[callee_addr, arg]);
+
+        return Ok(call_inst)
+
+        // unimplemented!("func_environ: translate_control unimplemented!");
+
+
+        // let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
+
+        // // Handle direct calls to locally-defined functions.
+        // if !self.module.is_imported_function(callee_index) {
+        //     // First append the callee vmctx address.
+        //     real_call_args.push(pos.func.special_param(ArgumentPurpose::VMContext).unwrap());
+
+        //     // Then append the regular call arguments.
+        //     real_call_args.extend_from_slice(call_args);
+
+        //     return Ok(pos.ins().call(callee, &real_call_args));
+        // }
+
+        // // Handle direct calls to imported functions. We use an indirect call
+        // // so that we don't have to patch the code at runtime.
+        // let pointer_type = self.pointer_type();
+        // let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
+        // let vmctx = self.vmctx(&mut pos.func);
+        // let base = pos.ins().global_value(pointer_type, vmctx);
+
+        // let mem_flags = ir::MemFlags::trusted();
+
+        // // Load the callee address.
+        // let body_offset =
+        //     i32::try_from(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
+        // let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
+
+        // // First append the callee vmctx address.
+        // let vmctx_offset =
+        //     i32::try_from(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
+        // let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
+        // real_call_args.push(vmctx);
+
+        // // Then append the regular call arguments.
+        // real_call_args.extend_from_slice(call_args);
+
+        // Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
+    }
+
+
+    fn translate_restore(
+        &mut self,
+        mut pos: FuncCursor<'_>,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        addr: ir::Value,
+        offset: i32,
+        arg: ir::Value
+    ) -> WasmResult<ir::Inst> {
+        let (func_sig, index_arg, func_idx) = self.get_restore_func(&mut pos.func, index);
+
+        // let memory_index = pos.ins().iconst(I32, index_arg as i64);
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        println!("[translate_restore] addr: {:?}, addr_type: {:}", addr, pos.func.dfg.value_type(addr));
+
+        let call_inst = pos
+            .ins()
+            .call_indirect(func_sig, func_addr, &[addr, arg]);
+        
+        Ok(call_inst)
+        // Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+
+        // Ok(addr)
+    }
+
+
 
 
     fn translate_memory_grow(

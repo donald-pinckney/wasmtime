@@ -21,7 +21,7 @@
         drop
     )
 
-    (func $restore200 (param $k i64)
+    (func $restore200 (param i64 i64)
 
     )
 
@@ -39,15 +39,17 @@
 
         ;; ;; (longjmp (i32.const 56) (i64.const 59))
 
+        ;; (control)
+
         (i32.store (i32.const 9) (i32.add 
         							(i32.const 65) 
-        							(i32.wrap/i64 (i64.add (i64.const 3) (setjmp $restore200))  )   ;; (setjmp (i32.const 0))
+        							(i32.wrap/i64 (i64.add (i64.const 3) (control $restore200))  )   ;; (setjmp (i32.const 0))
         						)) ;; 65
 
 
         (call $do_print)
 
-        (longjmp (i32.const 32) (i64.const 6))
+        ;; (longjmp (i32.const 32) (i64.const 6))
 
         ;; ;; (setjmp (i32.const 0))
         ;; drop ;; Discard the number of bytes written from the top the stack

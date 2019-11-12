@@ -126,6 +126,10 @@ pub enum RelocationTarget {
     Setjmp,
     /// Stuff
     Longjmp,
+    /// Stuff
+    Control,
+    /// Stuff
+    Restore,
     /// Jump table index.
     JumpTable(FuncIndex, ir::JumpTable),
 }
