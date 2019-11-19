@@ -253,9 +253,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let sig = self.control_sig.unwrap_or_else(|| {
             func.import_signature(Signature {
                 params: vec![
-                    // AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
                     AbiParam::new(I64),
                     AbiParam::new(I64),
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
                 ],
                 returns: vec![AbiParam::new(I64)],
                 call_conv: self.target_config.default_call_conv,
@@ -267,18 +267,19 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     fn get_restore_sig(&mut self, func: &mut Function) -> ir::SigRef {
         let sig = self.restore_sig.unwrap_or_else(|| {
-            unimplemented!("wasmtime: get_restore_sig")
-            // func.import_signature(Signature {
-            //     params: vec![
-            //         // AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-            //         AbiParam::new(I64),
-            //         AbiParam::new(I64),
-            //     ],
-            //     returns: vec![],
-            //     call_conv: self.target_config.default_call_conv,
-            // })
+            // unimplemented!("wasmtime: get_restore_sig")
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::new(I64),
+                    AbiParam::new(I64),
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                ],
+                returns: vec![],
+                call_conv: self.target_config.default_call_conv,
+            })
         });
         self.restore_sig = Some(sig);
+
         sig
     }
 
@@ -957,7 +958,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let call_inst = pos
             .ins()
-            .call_indirect(func_sig, func_addr, &[callee_addr, arg]);
+            .call_indirect(func_sig, func_addr, &[callee_addr, arg, vmctx]);
 
         return Ok(call_inst)
 
@@ -1007,22 +1008,20 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_restore(
         &mut self,
         mut pos: FuncCursor<'_>,
-        index: MemoryIndex,
-        heap: ir::Heap,
-        addr: ir::Value,
-        offset: i32,
-        arg: ir::Value
+        kid: ir::Value,
+        arg: ir::Value,
+        mem_index: MemoryIndex,
     ) -> WasmResult<ir::Inst> {
-        let (func_sig, index_arg, func_idx) = self.get_restore_func(&mut pos.func, index);
+        let (func_sig, index_arg, func_idx) = self.get_restore_func(&mut pos.func, mem_index);
 
         // let memory_index = pos.ins().iconst(I32, index_arg as i64);
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
-        println!("[translate_restore] addr: {:?}, addr_type: {:}", addr, pos.func.dfg.value_type(addr));
+        // println!("[translate_restore] arg: {:?}, addr_type: {:}", addr, pos.func.dfg.value_type(addr));
 
         let call_inst = pos
             .ins()
-            .call_indirect(func_sig, func_addr, &[addr, arg]);
+            .call_indirect(func_sig, func_addr, &[kid, arg, vmctx]);
         
         Ok(call_inst)
         // Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())

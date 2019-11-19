@@ -21,8 +21,12 @@
         drop
     )
 
-    (func $restore200 (param i64 i64)
+    (func $restore7 (param i64 i64)
+        ;; (call $do_print)
 
+        get_local 0
+        i64.const 7
+        restore
     )
 
     (func $main (export "_start")
@@ -43,7 +47,7 @@
 
         (i32.store (i32.const 9) (i32.add 
         							(i32.const 65) 
-        							(i32.wrap/i64 (i64.add (i64.const 3) (control $restore200))  )   ;; (setjmp (i32.const 0))
+        							(i32.wrap/i64 (i64.add (i64.const 3) (control $restore7))  )   ;; (setjmp (i32.const 0))
         						)) ;; 65
 
 

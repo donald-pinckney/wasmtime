@@ -256,6 +256,7 @@ pub fn instantiate(
 ) -> Result<InstanceHandle, SetupError> {
     let raw = RawCompiledModule::new(compiler, data, resolver, debug_info)?;
 
+
     InstanceHandle::new(
         Rc::new(raw.module),
         global_exports,

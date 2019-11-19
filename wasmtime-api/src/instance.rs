@@ -38,6 +38,7 @@ pub fn instantiate_in_context(
     let mut contexts = HashSet::new();
     let debug_info = context.debug_info();
     let mut resolver = SimpleResolver { imports };
+
     let instance = instantiate(
         &mut context.compiler(),
         data,
@@ -45,6 +46,7 @@ pub fn instantiate_in_context(
         exports,
         debug_info,
     )?;
+
     contexts.insert(context);
     Ok((instance, contexts))
 }
@@ -65,6 +67,7 @@ impl Instance {
         module: HostRef<Module>,
         externs: &[Extern],
     ) -> Result<Instance, Error> {
+
         let context = store.borrow_mut().context().clone();
         let exports = store.borrow_mut().global_exports().clone();
         let imports = module
@@ -74,8 +77,11 @@ impl Instance {
             .zip(externs.iter())
             .map(|(i, e)| (i.module().to_string(), i.name().to_string(), e.clone()))
             .collect::<Vec<_>>();
+
+        
         let (mut instance_handle, contexts) =
             instantiate_in_context(module.borrow().binary(), imports, context, exports)?;
+
 
         let exports = {
             let module = module.borrow();
@@ -91,6 +97,8 @@ impl Instance {
             }
             exports.into_boxed_slice()
         };
+
+
         Ok(Instance {
             instance_handle,
             contexts,

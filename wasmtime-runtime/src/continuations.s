@@ -31,6 +31,7 @@ _restore:
     // Current registers:
     // rdi = continuation id
     // rsi = argument for continuation
+    // rdx = vm context
 
     //  ******** Load the uthread_ctx_t from the _cont_table at index given by %rdi  ********
     movq _cont_table@GOTPCREL(%rip), %r12
@@ -62,6 +63,7 @@ _restore:
 
 
 _control:
+    // Arguments: rdi = fn_ptr, rsi = arg, rdx = vm context ptr
     //  ******** Save rdx to scratch space so we can use rdx  ********
     movq rdx_scratch@GOTPCREL(%rip), %r12
     movq %rdx, (%r12)
@@ -109,7 +111,8 @@ _control:
     // rbx = continuation id
     // r12 = pointer to uthread_ctx_t
     // r13 = function pointer argument
-    // r14 = env arg
+    // r14 = arg
+    // rdx = vm context ptr
 
 
     pushq    %rbp
@@ -125,9 +128,12 @@ _control:
     addq $8388608, %rsp
     subq $8, %rsp
 
-    //  ******** Jump to given function pointer with continuation id (rbx) as 1st arg, env (r14) as 2nd arg  ********
-    movq %rbx, %rdi
-    movq %r14, %rsi
+
+    //  ******** Jump to given function pointer with vm context ptr (56(%r12), old rdx) as 1st arg,
+    // continuation id (rbx) as 2nd arg, env (r14) as 3rd arg  ********
+    movq 56(%r12), %rdi
+    movq %rbx, %rsi
+    movq %r14, %rdx
     callq *%r13
 
     // If the invoked function ever returns (i.e. does not restore the continuation)

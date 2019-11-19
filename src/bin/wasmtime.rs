@@ -382,6 +382,7 @@ fn instantiate_module(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
+
     let instance = HostRef::new(Instance::new(store.clone(), module.clone(), &imports)?);
 
     Ok((instance, module, data))
@@ -393,7 +394,10 @@ fn handle_module(
     args: &Args,
     path: &Path,
 ) -> Result<(), Error> {
+
     let (instance, _module, data) = instantiate_module(store.clone(), module_registry, path)?;
+
+    println!("Done invoke");
 
     // If a function to invoke was given, invoke it.
     if let Some(f) = &args.flag_invoke {
