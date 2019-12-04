@@ -21,12 +21,19 @@
         drop
     )
 
-    (func $restore7 (param i64 i64)
-        ;; (call $do_print)
-
+    (func $otherRestore7 (param i64)
         get_local 0
         i64.const 7
         restore
+    )
+
+    (func $restore7 (param i64 i64)
+        (call $do_print)
+;;
+        ;; get_local 0
+        ;; (call $otherRestore7)
+        ;; i64.const 7
+        ;; restore
     )
 
     (func $main (export "_start")
@@ -45,13 +52,23 @@
 
         ;; (control)
 
-        (i32.store (i32.const 9) (i32.add 
-        							(i32.const 65) 
-        							(i32.wrap/i64 (i64.add (i64.const 3) (control $restore7))  )   ;; (setjmp (i32.const 0))
-        						)) ;; 65
 
 
-        (call $do_print)
+        ;; (i32.store (i32.const 9) (i32.add 
+        ;; 							(i32.const 65) 
+        ;; 							(i32.wrap/i64 (i64.add (i64.const 3) (control $restore7))  )   ;; (setjmp (i32.const 0))
+        ;; 						)) ;; 65
+        ;; (call $do_print)
+
+
+        (control $restore7)
+        drop
+
+        ;; vs.
+
+        ;; (call $do_print)
+
+
 
         ;; (longjmp (i32.const 32) (i64.const 6))
 

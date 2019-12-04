@@ -126,7 +126,7 @@ _control:
     //  ******** Set rsp to new stack ********
     movq %rax, %rsp
     addq $8388608, %rsp
-    subq $8, %rsp
+    subq $16, %rsp
 
 
     //  ******** Jump to given function pointer with vm context ptr (56(%r12), old rdx) as 1st arg,
@@ -134,7 +134,14 @@ _control:
     movq 56(%r12), %rdi
     movq %rbx, %rsi
     movq %r14, %rdx
+    //pushq %r8
+    //pushq %r10
+    //pushq %r11
+    //subq $8, %rsp
     callq *%r13
+    //popq %r11
+    //popq %r10
+    //popq %r8
 
     // If the invoked function ever returns (i.e. does not restore the continuation)
     // then we just kill the process.
