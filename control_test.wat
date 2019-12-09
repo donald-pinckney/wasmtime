@@ -21,22 +21,47 @@
         drop
     )
 
+    (func $max (param i64 i64) (result i64)
+        block
+            get_local 0
+            get_local 1
+            i64.sub
+            i64.const 0
+            i64.le_s
+            br_if 0
+            get_local 0
+            return
+        end
+        get_local 1
+    )
+
     (func $otherRestore7 (param i64)
         get_local 0
         i64.const 7
         restore
     )
 
-    (func $restore7 (param i64 i64)
-        (call $do_print)
-;;
-        ;; get_local 0
-        ;; (call $otherRestore7)
-        ;; i64.const 7
-        ;; restore
+;;     (func $restore42 (param i64 i64)
+;;         (call $do_print)
+;; ;;
+;;         get_local 0
+;;         ;; (call $otherRestore7)
+;;         ;; i64.const 7
+;;         ;; restore
+;;     )
+
+
+    (func $restore42 (param i64 i64)
+        get_local 0 ;; First param is the continuation ID
+        i64.const 42
+        restore
     )
 
     (func $main (export "_start")
+        (control $restore7)
+        
+        
+    
         ;; Creating a new io vector within linear memory
         (i32.store (i32.const 0) (i32.const 8))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
         (i32.store (i32.const 4) (i32.const 12))  ;; iov.iov_len - The length of the 'hello world\n' string
