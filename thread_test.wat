@@ -16,32 +16,25 @@
     )
 
 
-    (global $_kapture_result (mut i64) (i64.const 0)) ;; continuation_id
     (global $_after_kapture (mut i64) (i64.const 0)) ;; continuation_id
     (global $_to_capture (mut i32) (i32.const 0)) ;; kthread_func_t
 
-
     (func $_save_k_restore (param i64 i64)
-        (global.set $_kapture_result (get_local 0))
-        global.get $_after_kapture
-        i64.const 0 ;; value doesn't matter
-        restore
+        (restore (global.get $_after_kapture) (get_local 0))
     )
 
     (func $_kapture_handler (param i64 i64)
         (global.set $_after_kapture (get_local 0))
 
-        global.get $_to_capture
-        (control $_save_k_restore)
+        global.get $_to_capture ;; we HAVE to put this onto the stack BEFORE doing control!!!
+        control $_save_k_restore
         drop
         call_indirect (type $proc)
     )
 
     (func $kapture (param i32) (result i64)
         (global.set $_to_capture (get_local 0))
-        (control $_kapture_handler)
-        drop
-        global.get $_kapture_result
+        control $_kapture_handler
     )
 
 
@@ -61,8 +54,12 @@
         drop
     )
 
-    (func $print_d (param i64)
-        (call $print_ascii (i32.wrap/i64 (i64.add (i64.const 48) (get_local 0))))
+    (func $print_d64 (param i64)
+        (call $print_d32 (i32.wrap/i64 (get_local 0)))
+    )
+
+    (func $print_d32 (param i32)
+        (call $print_ascii (i32.add (i32.const 48) (get_local 0)))
     )
 
     (func $printA
@@ -72,33 +69,6 @@
         (call $print_ascii (i32.const 66))
     )
 
-
-    (func $loopA
-        (loop
-            call $printA
-            call $kthread_yield
-            br 0
-        )
-
-        call $kthread_exit
-    )
-
-    (func $loopB
-        (loop
-            call $printB
-            call $kthread_yield
-            br 0
-        )
-
-        call $kthread_exit
-    )
-
-
-    (func $restore7 (param i64 i64)
-        get_local 0 ;; First param is the continuation ID
-        i64.const 7
-        restore
-    )
 
 
 
@@ -126,12 +96,13 @@
                 (global.set $queue_len (i32.sub (global.get $queue_len) (i32.const 1)))
             )
             (else
-                unreachable ;; actuall it is reachable: don't do it
+                unreachable ;; actuall it is reachable: but don't do it
             )
         )
     )
 
     (func $kthread_init
+        ;; nothing to do here, the queue is initialized by the init values of the globals
         ;; call $queue_init
     )
 
@@ -140,29 +111,23 @@
     )
 
     (func $kthread_start
-        call $dequeue
-        i64.const 7
-        restore
+        (restore (call $dequeue) (i64.const 7)) ;; value doesn't matter, not used in threads
     )
 
-    (func $_kthread_switcher (param i64 i64)
+    (func $_kthread_yield_handler (param i64 i64)
         (call $enqueue (get_local 0))
-        call $dequeue
-        i64.const 7 ;; value doesn't matter
-        restore
+        (restore (call $dequeue) (i64.const 7)) ;; value doesn't matter, not used in threads
     )
 
     (func $kthread_yield
-        control $_kthread_switcher
+        control $_kthread_yield_handler
         drop
     )
 
     (func $kthread_exit
         (if (global.get $queue_len)
             (then
-                call $dequeue
-                i64.const 7 ;; value doesn't matter
-                restore
+                (restore (call $dequeue) (i64.const 7)) ;; value doesn't matter, not used in threads
             )
             (else
                 unreachable ;; would like to do exit(0)
@@ -171,85 +136,54 @@
     )
 
 
-    ;; (func $kthread)
 
-    ;; (func $kthread_create)
+    (func $loopA (local $i i32)
+        (set_local $i (i32.const 0))
 
-    (func $main (export "_start")
-        ;; (control $restore7)
-        
-        
-    
+        (block
+            (loop
+                call $printA
+                (call $print_d32 (get_local $i))
+                call $kthread_yield
+                
+                (set_local $i (i32.add (get_local $i) (i32.const 1)))
+                (br_if 1 (i32.eq (get_local $i) (i32.const 10)))
+                br 0
+            )
+        )
+
+        call $kthread_exit
+    )
+
+    (func $loopB (local $i i32)
+        (set_local $i (i32.const 0))
+
+        (block
+            (loop
+                call $printB
+                (call $print_d32 (get_local $i))
+                call $kthread_yield
+                
+                (set_local $i (i32.add (get_local $i) (i32.const 1)))
+                (br_if 1 (i32.eq (get_local $i) (i32.const 10)))
+                br 0
+            )
+        )
+
+        call $kthread_exit
+    )
+
+
+
+    (func $main (export "_start")    
         ;; Creating a new io vector within linear memory
         (i32.store (i32.const 0) (i32.const 16))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
         (i32.store (i32.const 4) (i32.const 2))  ;; iov.iov_len - The length of the 'hello world\n' string
-
-
-        ;; (call $enqueue (i64.const 3))
-        ;; (call $enqueue (i64.const 1))
-        ;; (call $enqueue (i64.const 3))
-        ;; (call $enqueue (i64.const 7))
-        ;; (call $print_d (call $dequeue))
-        ;; (call $enqueue (i64.const 8))
-        ;; (call $print_d (call $dequeue))
-        ;; (call $enqueue (i64.const 2))
-        ;; (call $print_d (call $dequeue))
-        ;; (call $print_d (call $dequeue))
-        ;; (call $print_d (call $dequeue))
-        ;; (call $print_d (call $dequeue))
-
-
-        ;; (call $print_d (i64.const 0))
-
-
-        ;; (call $kapture (i32.const 2))
-        ;; (call $kapture (i32.const 3))
-        ;; drop
-        ;; i64.const 7
-        ;; restore
 
 
         call $kthread_init
         (call $kthread_create (i32.const 0)) ;; 0 = $loopA
         (call $kthread_create (i32.const 1)) ;; 2 = $loopB
         call $kthread_start
-
-
-
-        ;; (call $kapture (i32.const 2))
-        
-        ;; call $print_d
-        ;; drop
-
-        ;; drop
-        ;; i64.const 7
-        ;; restore
-
-        ;; (call_indirect (i32.const 3))
-
-        ;; call $loopA
-        ;; call $loopA
-        ;; ;; ;; (i32.const 1294967296)
-        ;; (setjmp (i32.const 32))
-        ;; ;; ;; (i32.const 0)
-        ;; drop
-
-
-
-        ;; ;; (longjmp (i32.const 56) (i64.const 59))
-
-        ;; (control)
-
-
-
-        ;; (i32.store (i32.const 9) (i32.add 
-        ;; 							(i32.const 65) 
-        ;; 							(i32.wrap/i64 (i64.add (i64.const 3) (control $restore7))  )   ;; (setjmp (i32.const 0))
-        ;; 						)) ;; 65
-        ;; (call $do_print)
-
-
-        ;; (control $restore7)
-        ;; drop
     )
 )
