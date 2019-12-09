@@ -177,6 +177,7 @@
 
     (func $main (export "_start")    
         ;; Creating a new io vector within linear memory
+        ;; We just need to initialize this memory so printing will work.
         (i32.store (i32.const 0) (i32.const 16))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
         (i32.store (i32.const 4) (i32.const 2))  ;; iov.iov_len - The length of the 'hello world\n' string
 
