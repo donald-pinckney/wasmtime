@@ -76,15 +76,21 @@
     (func $loopA
         (loop
             call $printA
+            call $kthread_yield
             br 0
         )
+
+        call $kthread_exit
     )
 
     (func $loopB
         (loop
             call $printB
+            call $kthread_yield
             br 0
         )
+
+        call $kthread_exit
     )
 
 
@@ -139,11 +145,23 @@
         restore
     )
 
+    (func $_kthread_switcher (param i64 i64)
+        (call $enqueue (get_local 0))
+        call $dequeue
+        i64.const 7 ;; value doesn't matter
+        restore
+    )
+
+    (func $kthread_yield
+        control $_kthread_switcher
+        drop
+    )
+
     (func $kthread_exit
         (if (global.get $queue_len)
             (then
                 call $dequeue
-                i64.const 7
+                i64.const 7 ;; value doesn't matter
                 restore
             )
             (else
@@ -183,12 +201,21 @@
 
         ;; (call $print_d (i64.const 0))
 
-        (call $kapture (i32.const 2))
-        (call $kapture (i32.const 3))
-        drop
-        i64.const 7
-        restore
-        
+
+        ;; (call $kapture (i32.const 2))
+        ;; (call $kapture (i32.const 3))
+        ;; drop
+        ;; i64.const 7
+        ;; restore
+
+
+        call $kthread_init
+        (call $kthread_create (i32.const 0)) ;; 0 = $loopA
+        (call $kthread_create (i32.const 1)) ;; 2 = $loopB
+        call $kthread_start
+
+
+
         ;; (call $kapture (i32.const 2))
         
         ;; call $print_d
