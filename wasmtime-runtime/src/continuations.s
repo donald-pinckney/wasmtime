@@ -121,7 +121,7 @@ _control:
 //    callq _continuation_alloc_stack
 
     movl $8388608, %edi
-    callq _malloc
+    callq _malloc16
 
     //  ******** Set rsp to new stack ********
     movq %rax, %rsp

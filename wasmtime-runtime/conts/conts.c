@@ -29,3 +29,10 @@ void init_table(void) {
         cont_table[i] = malloc(sizeof(uthread_ctx_t));
     }
 }
+
+// from: https://stackoverflow.com/questions/227897/how-to-allocate-aligned-memory-only-using-the-standard-library
+void *malloc16(size_t size) {
+    void *mem = malloc(size+15);
+    void *ptr = (void *)(((uint64_t)mem+15) & ~ (uint64_t)0x0F);
+    return ptr;
+}

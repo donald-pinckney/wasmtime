@@ -7,6 +7,45 @@
     (memory 1)
     (export "memory" (memory 0))
 
+    (type $proc (func))
+
+    (table funcref
+        (elem
+            $loopA $loopB $printA $printB
+        )
+    )
+
+
+    (global $_kapture_result (mut i64) (i64.const 0)) ;; continuation_id
+    (global $_after_kapture (mut i64) (i64.const 0)) ;; continuation_id
+    (global $_to_capture (mut i32) (i32.const 0)) ;; kthread_func_t
+
+
+    (func $_save_k_restore (param i64 i64)
+        (global.set $_kapture_result (get_local 0))
+        global.get $_after_kapture
+        i64.const 0 ;; value doesn't matter
+        restore
+    )
+
+    (func $_kapture_handler (param i64 i64)
+        (global.set $_after_kapture (get_local 0))
+
+        global.get $_to_capture
+        (control $_save_k_restore)
+        drop
+        call_indirect (type $proc)
+    )
+
+    (func $kapture (param i32) (result i64)
+        (global.set $_to_capture (get_local 0))
+        (control $_kapture_handler)
+        drop
+        global.get $_kapture_result
+    )
+
+
+
     ;; Write 'hello world\n' to memory at an offset of 8 bytes
     ;; Note the trailing newline which is required for the text to appear
     (data (i32.const 16) "A\n")
@@ -56,31 +95,65 @@
     )
 
 
-    ;; At memory index 32 is stored the next head pointer (where to store the next enqueued value)
-    ;; At memory index 36 is stored the current tail pointer (where to dequeue from)
+
+
+    (global $queue_head (mut i32) (i32.const 40))
+    (global $queue_tail (mut i32) (i32.const 40))
+    (global $queue_len (mut i32) (i32.const 0))
+
     ;; The actual queue starts at memory index 40
-    (func $queue_init
-        (i32.store (i32.const 32) (i32.const 40))
-        (i32.store (i32.const 36) (i32.const 40)) ;; dequeue index starts off of the queue, sketch but works for now
-    )
 
     (func $enqueue (param i64)
-        (i32.load (i32.const 32))
+        global.get $queue_head
         get_local 0
         i64.store
 
-        
-        (i32.store (i32.const 32) (i32.add (i32.load (i32.const 32)) (i32.const 8)))
+        (global.set $queue_head (i32.add (global.get $queue_head) (i32.const 8)))     
+        (global.set $queue_len (i32.add (global.get $queue_len) (i32.const 1)))
     )
 
     (func $dequeue (result i64)
-        (i64.load (i32.load (i32.const 36)))
-        (i32.store (i32.const 36) (i32.add (i32.load (i32.const 36)) (i32.const 8) ))
+        (if (result i64) (global.get $queue_len)
+            (then
+                (i64.load (global.get $queue_tail))
+                (global.set $queue_tail (i32.add (global.get $queue_tail) (i32.const 8) ))
+                (global.set $queue_len (i32.sub (global.get $queue_len) (i32.const 1)))
+            )
+            (else
+                unreachable ;; actuall it is reachable: don't do it
+            )
+        )
     )
 
-    ;; (func $kthread_init
-    
-    ;; )
+    (func $kthread_init
+        ;; call $queue_init
+    )
+
+    (func $kthread_create (param i32) ;; function ptr
+        (call $enqueue (call $kapture (get_local 0)))
+    )
+
+    (func $kthread_start
+        call $dequeue
+        i64.const 7
+        restore
+    )
+
+    (func $kthread_exit
+        (if (global.get $queue_len)
+            (then
+                call $dequeue
+                i64.const 7
+                restore
+            )
+            (else
+                unreachable ;; would like to do exit(0)
+            )
+        )
+    )
+
+
+    ;; (func $kthread)
 
     ;; (func $kthread_create)
 
@@ -93,23 +166,40 @@
         (i32.store (i32.const 0) (i32.const 16))  ;; iov.iov_base - This is a pointer to the start of the 'hello world\n' string
         (i32.store (i32.const 4) (i32.const 2))  ;; iov.iov_len - The length of the 'hello world\n' string
 
-        call $queue_init
 
-        (call $enqueue (i64.const 3))
-        (call $enqueue (i64.const 1))
-        (call $enqueue (i64.const 3))
-        (call $enqueue (i64.const 7))
-        (call $print_d (call $dequeue))
-        (call $enqueue (i64.const 8))
-        (call $print_d (call $dequeue))
-        (call $enqueue (i64.const 2))
-        (call $print_d (call $dequeue))
-        (call $print_d (call $dequeue))
-        (call $print_d (call $dequeue))
-        (call $print_d (call $dequeue))
+        ;; (call $enqueue (i64.const 3))
+        ;; (call $enqueue (i64.const 1))
+        ;; (call $enqueue (i64.const 3))
+        ;; (call $enqueue (i64.const 7))
+        ;; (call $print_d (call $dequeue))
+        ;; (call $enqueue (i64.const 8))
+        ;; (call $print_d (call $dequeue))
+        ;; (call $enqueue (i64.const 2))
+        ;; (call $print_d (call $dequeue))
+        ;; (call $print_d (call $dequeue))
+        ;; (call $print_d (call $dequeue))
+        ;; (call $print_d (call $dequeue))
 
 
-        (call $print_d (i64.const 0))
+        ;; (call $print_d (i64.const 0))
+
+        (call $kapture (i32.const 2))
+        (call $kapture (i32.const 3))
+        drop
+        i64.const 7
+        restore
+        
+        ;; (call $kapture (i32.const 2))
+        
+        ;; call $print_d
+        ;; drop
+
+        ;; drop
+        ;; i64.const 7
+        ;; restore
+
+        ;; (call_indirect (i32.const 3))
+
         ;; call $loopA
         ;; call $loopA
         ;; ;; ;; (i32.const 1294967296)
