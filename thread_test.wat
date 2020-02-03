@@ -7,17 +7,18 @@
     (memory 1)
     (export "memory" (memory 0))
 
-    (type $proc (func))
+    (type $proc (func (param i64)))
 
     (table funcref
         (elem
-            $loopA $loopB $printA $printB
+            $thread_print_loop $loopB $printA $printB
         )
     )
 
 
     (global $_after_kapture (mut i64) (i64.const 0)) ;; continuation_id
     (global $_to_capture (mut i32) (i32.const 0)) ;; kthread_func_t
+    (global $_to_capture_arg (mut i64) (i64.const 0)) ;; arbitrary argument
 
     (func $_save_k_restore (param i64 i64)
         (restore (global.get $_after_kapture) (local.get 0))
@@ -26,14 +27,17 @@
     (func $_kapture_handler (param i64 i64)
         (global.set $_after_kapture (local.get 0))
 
-        global.get $_to_capture ;; we HAVE to put this onto the stack BEFORE doing control!!!
+        global.get $_to_capture_arg
+        global.get $_to_capture ;; we HAVE to put these onto the stack BEFORE doing control!!!
+
         control $_save_k_restore
         drop
         call_indirect (type $proc)
     )
 
-    (func $kapture (param i32) (result i64)
+    (func $kapture (param i32 i64) (result i64)
         (global.set $_to_capture (local.get 0))
+        (global.set $_to_capture_arg (local.get 1))
         control $_kapture_handler
     )
 
@@ -111,8 +115,8 @@
         ;; call $queue_init
     )
 
-    (func $kthread_create (param i32) ;; function ptr, entry in the table
-        (call $enqueue (call $kapture (local.get 0)))
+    (func $kthread_create (param i32 i64) ;; function ptr, entry in the table
+        (call $enqueue (call $kapture (local.get 0) (local.get 1)))
     )
 
     (func $_kthread_start_handler (param i64 i64)
@@ -150,12 +154,12 @@
 
 
 
-    (func $loopA (local $i i32)
+    (func $thread_print_loop (param $char i64) (local $i i32)
         (local.set $i (i32.const 0))
 
         (block
             (loop
-                call $printA
+                (call $print_ascii (i32.wrap_i64 (local.get $char)))
                 (call $print_d32 (local.get $i))
                 call $kthread_yield
 
@@ -167,25 +171,6 @@
 
         call $kthread_exit
     )
-
-    (func $loopB (local $i i32)
-        (local.set $i (i32.const 0))
-
-        (block
-            (loop
-                call $printB
-                (call $print_d32 (local.get $i))
-                call $kthread_yield
-                
-                (local.set $i (i32.add (local.get $i) (i32.const 1)))
-                (br_if 1 (i32.eq (local.get $i) (i32.const 10)))
-                br 0
-            )
-        )
-
-        call $kthread_exit
-    )
-
 
 
     (func $main (export "_start")    
@@ -196,8 +181,8 @@
 
 
         call $kthread_init
-        (call $kthread_create (i32.const 0)) ;; 0 = $loopA
-        (call $kthread_create (i32.const 1)) ;; 1 = $loopB
+        (call $kthread_create (i32.const 0) (i64.const 65)) ;; 0 = $thread_print_loop, 65 = 'A'
+        (call $kthread_create (i32.const 0) (i64.const 66)) ;; 0 = $thread_print_loop, 66 = 'B'
         call $kthread_start
 
         call $printC
