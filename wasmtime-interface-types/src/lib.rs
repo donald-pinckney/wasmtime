@@ -469,7 +469,12 @@ fn translate_outgoing(
                         RuntimeValue::F64(a) => values.push(Value::F64(f64::from_bits(a))),
                         _ => bail!("can't convert {:?} to double", arg),
                     },
-                    _ => bail!("unsupported outgoing binding expr {:?}", expr),
+                    ast::WebidlTypeRef::Scalar(ast::WebidlScalarType::UnrestrictedDouble) => match arg {
+                        RuntimeValue::F32(a) => values.push(Value::F64(f32::from_bits(a) as f64)),
+                        RuntimeValue::F64(a) => values.push(Value::F64(f64::from_bits(a))),
+                        _ => bail!("can't convert {:?} to double", arg),
+                    },
+                    _ => bail!("unsupported outgoing binding expr (1) {:?}", expr),
                 }
             }
             ast::OutgoingBindingExpression::Utf8Str(e) => {
@@ -489,7 +494,7 @@ fn translate_outgoing(
             }
             _ => {
                 drop((cx, handle));
-                bail!("unsupported outgoing binding expr {:?}", expr);
+                bail!("unsupported outgoing binding expr (2) {:?}", expr);
             }
         }
     }

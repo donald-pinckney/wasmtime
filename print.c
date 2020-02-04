@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 int main() {
-    printf("hello!\n");
+    double x = 5.67344;
+    printf("%.6f", x);
     return 0;
 }
