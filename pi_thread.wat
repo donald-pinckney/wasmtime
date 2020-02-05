@@ -266,7 +266,7 @@
 
 
 
-    (global $numTerms i64 (i64.const 1000))
+    (global $numTerms i64 (i64.const 10000))
     (global $numThreads i64 (i64.const 8))
 
 

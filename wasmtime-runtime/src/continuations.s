@@ -13,13 +13,13 @@
 .globl _restore
 .globl _control
 .globl _cont_table
-.globl _cont_id
+//.globl _cont_id
 .section __DATA,__data
     // table_len: .byte 5000
     .align 3
     rdx_scratch: .quad 0
     _cont_id: .quad 0
-    _cont_table: .skip 40000 // has to be the same as table_len * 8
+    _cont_table: .skip 40000 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
 
 .text
 _mark_stack_start:
@@ -27,41 +27,7 @@ _mark_stack_start:
 
 
 
-_restore:
-    // Current registers:
-    // rdi = continuation id
-    // rsi = argument for continuation
-    // rdx = vm context
-
-    //  ******** Load the uthread_ctx_t from the _cont_table at index given by %rdi  ********
-    movq _cont_table@GOTPCREL(%rip), %r12
-    // movq _threads@GOTPCREL(%rip), %r13d
-    movq (%r12, %rdi, 8), %r12
-
-    // r12 = the pointer to the uthread_ctx_t
-
-    //  ******** Move rsi (the argument value) to rax, this will become the argument to the restored continuation  ********
-    movq %rsi, %rax
-
-    //  ******** Restore all the registers OTHER THAN rax
-    movq 16(%r12), %rsp
-//    movq 32(%r12), %rax
-    movq 40(%r12), %rbx
-    movq 48(%r12), %rcx
-    movq 56(%r12), %rdx
-    movq 64(%r12), %rbp
-    movq 72(%r12), %rsi
-    movq 80(%r12), %rdi
-
-    movq 24(%r12), %r12
-    jmpq *%r12
-
-    //  ******** Restore uthread_ctx_t, passing the argument rsi into rax  ********
-    retq
-
 // extern uint64_t control(handler_fn h);
-
-
 _control:
     // Arguments: rdi = fn_ptr, rsi = arg, rdx = vm context ptr
     //  ******** Save rdx to scratch space so we can use rdx  ********
@@ -70,10 +36,23 @@ _control:
 
     //  ******** Load the current continuation id into rdx,  ********
     // and increment it in memory
-    movq _cont_id@GOTPCREL(%rip), %r12
-    incq (%r12)
-    movq (%r12), %rdx
-    decq %rdx
+    //movq _cont_id@GOTPCREL(%rip), %r12
+    //incq (%r12)
+    //movq (%r12), %rdx
+    //decq %rdx
+
+    // rdx is free
+
+    // Not sure that I need to save %rax
+    // Definitely want to save rdi and rsi
+    pushq %rax
+    pushq %rdi
+    pushq %rsi
+    call _alloc_cont_id
+    movq %rax, %rdx
+    popq %rsi
+    popq %rdi
+    popq %rax
 
     // TODO: check that %rdx < table_len, otherwise trap
 
@@ -150,6 +129,52 @@ _control:
     movq $0, %rdi
     syscall
     retq // not that this really matters
+
+
+_restore:
+    // Current registers:
+    // rdi = continuation id
+    // rsi = argument for continuation
+    // rdx = vm context
+
+    // First, we MARK the given continuation id as free, but this does NOT wipe away the stuff stored in the table
+    pushq %rdi
+    pushq %rsi
+    pushq %rdx
+    call _dealloc_cont_id
+    popq %rdx
+    popq %rsi
+    popq %rdi
+
+    //  ******** Load the uthread_ctx_t from the _cont_table at index given by %rdi  ********
+    movq _cont_table@GOTPCREL(%rip), %r12
+    // movq _threads@GOTPCREL(%rip), %r13d
+    movq (%r12, %rdi, 8), %r12
+
+    // r12 = the pointer to the uthread_ctx_t
+
+    //  ******** Move rsi (the argument value) to rax, this will become the argument to the restored continuation  ********
+    movq %rsi, %rax
+
+    //  ******** Restore all the registers OTHER THAN rax
+    movq 16(%r12), %rsp
+//    movq 32(%r12), %rax
+    movq 40(%r12), %rbx
+    movq 48(%r12), %rcx
+    movq 56(%r12), %rdx
+    movq 64(%r12), %rbp
+    movq 72(%r12), %rsi
+    movq 80(%r12), %rdi
+
+    // Restore the rip, and jump to it
+    movq 24(%r12), %r12
+    jmpq *%r12
+
+    //  ******** Restore uthread_ctx_t, passing the argument rsi into rax  ********
+    retq
+
+
+
 
 
 .end

@@ -22,12 +22,33 @@ typedef struct uthread_ctx_t {
 
 } uthread_ctx_t;
 
-extern uthread_ctx_t *cont_table[5000];
+#define CONT_TABLE_SIZE 5000
+
+extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
+
+uint64_t free_list[CONT_TABLE_SIZE];
+uint64_t free_top = 0; // From this index we will alloc the next cont_id
 
 void init_table(void) {
-    for (int i = 0; i < 5000; i++) {
+    for (int i = 0; i < CONT_TABLE_SIZE; i++) {
         cont_table[i] = malloc(sizeof(uthread_ctx_t));
+        free_list[i] = (uint64_t)i;
     }
+    free_top = 0;
+}
+
+
+uint64_t alloc_cont_id() {
+    if(free_top == CONT_TABLE_SIZE) {
+        abort();
+    } else {
+        return free_list[free_top++];
+    }
+    
+}
+
+void dealloc_cont_id(uint64_t id) {
+    free_list[--free_top] = id;
 }
 
 // from: https://stackoverflow.com/questions/227897/how-to-allocate-aligned-memory-only-using-the-standard-library
