@@ -85,29 +85,81 @@
 
     ;; (global $queue_start_addr i32 (i32.const 40))
 
-    (global $queue_head (mut i32) (i32.const 40))
-    (global $queue_tail (mut i32) (i32.const 40))
+    (global $queue_head_idx (mut i32) (i32.const 0)) ;; where the next item will be enqueued
+    (global $queue_tail_idx (mut i32) (i32.const 0)) ;; where the next item will be dequeued
     (global $queue_len (mut i32) (i32.const 0))
+    (global $queue_capacity_log2 (mut i32) (i32.const 2))
+    (global $queue_base_addr (mut i32) (i32.const 0))
 
     ;; The actual queue starts at memory index 40
 
-    (func $set_thread_queue_start_addr (param i32)
-        (global.set $queue_head (local.get 0))
-        (global.set $queue_tail (local.get 0))
+    ;; (func $set_thread_queue_start_addr (param i32)
+    ;;     (global.set $queue_head (local.get 0))
+    ;;     (global.set $queue_tail (local.get 0))
+    ;; )
+
+    (func $pow2 (param $x i32) (result i32)
+        (i32.shl (i32.const 1) (local.get $x))
+    )
+
+    (func $queue_init (param $start_addr i32) (param $capacity_log2 i32)
+        (global.set $queue_len (i32.const 0))
+        (global.set $queue_head_idx (i32.const 0))
+        (global.set $queue_tail_idx (i32.const 0))
+
+        (global.set $queue_base_addr (local.get $start_addr))
+        (global.set $queue_capacity_log2 (local.get $capacity_log2))
+    )
+
+    (func $queue_addr (param $idx i32) (result i32)
+        ;; base + 8*idx
+        (i32.add 
+            (global.get $queue_base_addr) 
+            (i32.shl 
+                (local.get $idx) 
+                (i32.const 3)))
     )
 
     (func $enqueue (param i64)
-        (i64.store (global.get $queue_head) (local.get 0))
+        ;; test if queue_len = 2^queue_capacity_log2
+        (if (i32.eq (global.get $queue_len) (i32.shl (i32.const 1) (global.get $queue_capacity_log2)))
+            (then
+                unreachable ;; is so, abort
+            )
+            (else
+                ;; store at address base + 8*head_idx
+                (i64.store (call $queue_addr (global.get $queue_head_idx)) (local.get 0))
 
-        (global.set $queue_head (i32.add (global.get $queue_head) (i32.const 8)))     
-        (global.set $queue_len (i32.add (global.get $queue_len) (i32.const 1)))
+                ;; queue_head_idx = (queue_head_idx + 1) mod 2^queue_capacity_log2 
+                (global.set $queue_head_idx 
+                    (i32.and 
+                        (i32.add 
+                            (global.get $queue_head_idx) 
+                            (i32.const 1)) 
+                        (i32.sub (i32.shl (i32.const 1) (global.get $queue_capacity_log2)) (i32.const 1))))
+
+                ;; increment queue length
+                (global.set $queue_len (i32.add (global.get $queue_len) (i32.const 1)))
+            )
+        )
+        
     )
 
     (func $dequeue (result i64)
         (if (result i64) (global.get $queue_len) 
             (then
-                (i64.load (global.get $queue_tail))
-                (global.set $queue_tail (i32.add (global.get $queue_tail) (i32.const 8) ))
+                ;; load from address base + 8*tail_idx
+                (i64.load (call $queue_addr (global.get $queue_tail_idx)))
+
+                ;; queue_tail_idx = (queue_tail_idx + 1) mod 2^queue_capacity_log2 
+                (global.set $queue_tail_idx 
+                    (i32.and 
+                        (i32.add 
+                            (global.get $queue_tail_idx) 
+                            (i32.const 1)) 
+                        (i32.sub (i32.shl (i32.const 1) (global.get $queue_capacity_log2)) (i32.const 1))))
+                
+                ;; decrement queue length
                 (global.set $queue_len (i32.sub (global.get $queue_len) (i32.const 1)))
             )
             (else
@@ -214,8 +266,8 @@
 
 
 
-    (global $numThreads i64 (i64.const 4))
-    (global $numTerms i64 (i64.const 40))
+    (global $numTerms i64 (i64.const 1000))
+    (global $numThreads i64 (i64.const 8))
 
 
     (func $the_main (export "the_main") (result f64) (local $numTerms i64) (local $k i64) (local $termsPerThread i64) (local $sum f64)
@@ -228,12 +280,18 @@
         ;; (local.set $numTerms (i64.const 10))
 
         (local.set $termsPerThread (i64.div_s (global.get $numTerms) (global.get $numThreads)))
-        (local.set $k (i64.const 0))
 
-        (call $set_thread_queue_start_addr (i32.wrap_i64 (i64.add (i64.mul (i64.const 8) (global.get $numThreads)) (i64.const 40))))
+
+        ;; The base address of the queue is 40 + 8*numThreads. 
+        ;; The threads will write results into addresses [40, 40+8*numThreads)
+        (call $queue_init 
+            (i32.wrap_i64 (i64.add (i64.mul (i64.const 8) (global.get $numThreads)) (i64.const 40)))
+            (call $containing_log_2_i32 (i32.wrap_i64 (global.get $numThreads)))
+        )
 
         call $kthread_init
 
+        (local.set $k (i64.const 0))
 
         (block
             (loop
@@ -251,7 +309,6 @@
         )
 
         call $kthread_start
-
 
         (local.set $sum (f64.const 0))
         (local.set $k (i64.const 0))
@@ -278,6 +335,28 @@
     )
 
     (func $main (export "_start") 
-
+        call $printA
     )
+
+    (func $containing_log_2_i32 (param $param i32) (result i32) (local $p i32)
+        ;; (local.set $param (i32.const 1023))
+
+        (if (result i32) (i32.gt_u (local.get $param) (i32.shl (i32.const 1) (i32.const 31)))
+            (then
+                unreachable
+            )
+            (else
+                (local.set $p (i32.sub (i32.const 32) (i32.clz (local.get $param))))
+                (if (result i32) (i32.eq (local.get $param) (i32.shl (i32.const 1) (i32.sub (local.get $p) (i32.const 1))))
+                    (then
+                        (i32.sub (local.get $p) (i32.const 1))
+                    )
+                    (else
+                        (local.get $p)
+                    )
+                )
+            )
+        )
+    )
+    ;; (start $main)
 )

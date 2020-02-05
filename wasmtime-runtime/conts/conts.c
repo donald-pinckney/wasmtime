@@ -22,10 +22,10 @@ typedef struct uthread_ctx_t {
 
 } uthread_ctx_t;
 
-extern uthread_ctx_t *cont_table[50];
+extern uthread_ctx_t *cont_table[5000];
 
 void init_table(void) {
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 5000; i++) {
         cont_table[i] = malloc(sizeof(uthread_ctx_t));
     }
 }

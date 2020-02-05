@@ -15,11 +15,11 @@
 .globl _cont_table
 .globl _cont_id
 .section __DATA,__data
-    table_len: .byte 50
+    // table_len: .byte 5000
     .align 3
     rdx_scratch: .quad 0
     _cont_id: .quad 0
-    _cont_table: .skip 400 // has to be the same as table_len * 8
+    _cont_table: .skip 40000 // has to be the same as table_len * 8
 
 .text
 _mark_stack_start:
