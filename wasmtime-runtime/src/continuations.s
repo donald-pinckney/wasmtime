@@ -34,15 +34,10 @@ _control:
     movq rdx_scratch@GOTPCREL(%rip), %r12
     movq %rdx, (%r12)
 
-    //  ******** Load the current continuation id into rdx,  ********
-    // and increment it in memory
-    //movq _cont_id@GOTPCREL(%rip), %r12
-    //incq (%r12)
-    //movq (%r12), %rdx
-    //decq %rdx
 
     // rdx is free
 
+    // ******** Get a new (free) continuation id ************
     // Not sure that I need to save %rax
     // Definitely want to save rdi and rsi
     pushq %rax
@@ -54,13 +49,10 @@ _control:
     popq %rdi
     popq %rax
 
-    // TODO: check that %rdx < table_len, otherwise trap
-
     // ******** Index into the continuation table  ********
     // After this, r12 holds the pointer to the uthread_ctx_t
     movq _cont_table@GOTPCREL(%rip), %r12
     movq (%r12, %rdx, 8), %r12
-
 
     // ********  Save the current context into the context in the table   ********
     movq %rsp, 16(%r12)
@@ -99,12 +91,12 @@ _control:
     //  ******** Alloc a new stack space  ********
 //    callq _continuation_alloc_stack
 
-    movl $8388608, %edi
+    movl $1024, %edi // 8388608
     callq _malloc16
 
     //  ******** Set rsp to new stack ********
     movq %rax, %rsp
-    addq $8388608, %rsp
+    addq $1024, %rsp // 8388608
     subq $16, %rsp
 
 

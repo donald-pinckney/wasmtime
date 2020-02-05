@@ -251,7 +251,7 @@
                 ;; (call $print_ascii (i32.wrap_i64 (local.get $thread_addr)))
     
                 ;; (call $print_d32 (local.get $i))
-                call $kthread_yield
+                ;; call $kthread_yield
 
                 (local.set $k (i64.add (local.get $k) (i64.const 1)))
                 (br_if 1 (i64.gt_s (local.get $k) (local.get $to)))
@@ -261,12 +261,12 @@
 
         (f64.store (i32.wrap_i64 (local.get $thread_addr)) (local.get $f))
 
-        call $kthread_exit
+        ;; call $kthread_exit
     )
 
 
 
-    (global $numTerms i64 (i64.const 10000000))
+    (global $numTerms i64 (i64.const 100000000))
     (global $numThreads i64 (i64.const 1))
 
 
@@ -284,22 +284,22 @@
 
         ;; The base address of the queue is 40 + 8*numThreads. 
         ;; The threads will write results into addresses [40, 40+8*numThreads)
-        (call $queue_init 
-            (i32.wrap_i64 (i64.add (i64.mul (i64.const 8) (global.get $numThreads)) (i64.const 40)))
-            (call $containing_log_2_i32 (i32.wrap_i64 (global.get $numThreads)))
-        )
+        ;; (call $queue_init 
+        ;;     (i32.wrap_i64 (i64.add (i64.mul (i64.const 8) (global.get $numThreads)) (i64.const 40)))
+        ;;     (call $containing_log_2_i32 (i32.wrap_i64 (global.get $numThreads)))
+        ;; )
 
-        call $kthread_init
+        ;; call $kthread_init
 
         (local.set $k (i64.const 0))
 
         (block
             (loop
-                (call $kthread_create (i32.const 0) 
+                (call $terms 
                     (i64.add (i64.mul (local.get $k) (i64.const 8)) (i64.const 40)) 
                     (i64.mul (local.get $k) (local.get $termsPerThread))
                     (i64.sub (i64.add (local.get $termsPerThread) (i64.mul (local.get $k) (local.get $termsPerThread))) (i64.const 1))
-                ) ;; 0 = $thread_print_loop, 65 = 'A'
+                ) ;; 0 = $terms, 65 = 'A'
 
 
                 (local.set $k (i64.add (local.get $k) (i64.const 1)))
@@ -308,7 +308,7 @@
             )
         )
 
-        call $kthread_start
+        ;; call $kthread_start
 
         (local.set $sum (f64.const 0))
         (local.set $k (i64.const 0))
