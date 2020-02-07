@@ -4,8 +4,8 @@
     ;; (File Descriptor, *iovs, iovs_len, nwritten) -> Returns number of bytes written
     (import "wasi_unstable" "fd_write" (func $fd_write (param i32 i32 i32 i32) (result i32)))
 
-    (memory 1)
-    (export "memory" (memory 0))
+    (memory 100)
+    ;; (export "memory" (memory 0))
 
     (type $proc (func (param i64 i64 i64)))
 
@@ -266,8 +266,8 @@
 
 
 
-    (global $numTerms i64 (i64.const 10000000))
-    (global $numThreads i64 (i64.const 1))
+    (global $numTerms i64 (i64.const 100000000)) ;; 100000000
+    (global $numThreads i64 (i64.const 100000))
 
 
     (func $the_main (export "the_main") (result f64) (local $numTerms i64) (local $k i64) (local $termsPerThread i64) (local $sum f64)

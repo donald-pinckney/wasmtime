@@ -26,7 +26,9 @@ fn main() {
     let mut build = cc::Build::new();
     build
         .warnings(true)
-        .file("conts/conts.c");
+        .file("conts/conts.c")
+        .opt_level(3)
+        .debug(false);
         // .file("conts/conts.s");
     
     build.compile("conts");

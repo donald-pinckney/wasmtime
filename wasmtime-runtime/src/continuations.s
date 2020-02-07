@@ -19,7 +19,7 @@
     .align 3
     rdx_scratch: .quad 0
     _cont_id: .quad 0
-    _cont_table: .skip 40000 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
+    _cont_table: .skip 800008 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
 
 .text
 _mark_stack_start:
@@ -88,16 +88,28 @@ _control:
 
     pushq    %rbp
     movq    %rsp, %rbp
+    callq _alloc_stack
+    movq %rax, %rsp
+    movq %rax, 0(%r12)
+
+    //pushq    %rbp
+    //movq    %rsp, %rbp
+    //movq 0(%r12), %rsp
+
+
     //  ******** Alloc a new stack space  ********
 //    callq _continuation_alloc_stack
 
-    movl $1024, %edi // 8388608
-    callq _malloc16
+    //movl $1024, %edi // 8388608
+    //callq _alloc_stack
+    //movq %rax, %rsp
+
+    //callq _malloc16
+    //movq %rax, %rsp
 
     //  ******** Set rsp to new stack ********
-    movq %rax, %rsp
-    addq $1024, %rsp // 8388608
-    subq $16, %rsp
+    //addq $1024, %rsp // 8388608
+    //subq $16, %rsp
 
 
     //  ******** Jump to given function pointer with vm context ptr (56(%r12), old rdx) as 1st arg,
@@ -140,10 +152,25 @@ _restore:
 
     //  ******** Load the uthread_ctx_t from the _cont_table at index given by %rdi  ********
     movq _cont_table@GOTPCREL(%rip), %r12
-    // movq _threads@GOTPCREL(%rip), %r13d
     movq (%r12, %rdi, 8), %r12
 
     // r12 = the pointer to the uthread_ctx_t
+
+    // ********* Free the current stack ***********
+    //pushq    %rbp
+    //movq    %rsp, %rbp
+
+    //movq %rsp, %rdi
+
+    pushq %rdi
+    pushq %rsi
+    pushq %rdx
+    movq %rsp, %rdi
+    subq $24, %rdi
+    callq _dealloc_stack
+    popq %rdx
+    popq %rsi
+    popq %rdi
 
     //  ******** Move rsi (the argument value) to rax, this will become the argument to the restored continuation  ********
     movq %rsi, %rax
@@ -157,6 +184,7 @@ _restore:
     movq 64(%r12), %rbp
     movq 72(%r12), %rsi
     movq 80(%r12), %rdi
+
 
     // Restore the rip, and jump to it
     movq 24(%r12), %r12
