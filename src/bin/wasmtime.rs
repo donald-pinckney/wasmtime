@@ -397,8 +397,6 @@ fn handle_module(
 
     let (instance, _module, data) = instantiate_module(store.clone(), module_registry, path)?;
 
-    println!("Done invoke");
-
     // If a function to invoke was given, invoke it.
     if let Some(f) = &args.flag_invoke {
         let data = ModuleData::new(&data)?;
