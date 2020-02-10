@@ -76,7 +76,7 @@ thread_local! {
 /// be performed per-thread. This operation may incur some overhead and
 /// so should be done only when needed to use wasm.
 #[no_mangle]
-pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {
+pub extern "C" fn wasmtime_init_finish(vmctx: &mut VMContext) {    
     if !TRAP_CONTEXT.with(|cx| cx.tried_to_install_signal_handlers.get()) {
         TRAP_CONTEXT.with(|cx| {
             cx.tried_to_install_signal_handlers.set(true);

@@ -473,8 +473,6 @@ impl Instance {
         if let Some(start_index) = self.module.start_func {
             self.invoke_function(start_index)
         } else if let Some(start_export) = self.module.exports.get("_start") {
-            println!("About to invoke 1");
-
             // As a compatibility measure, if the module doesn't have a start
             // function but does have a _start function exported, call that.
             match *start_export {

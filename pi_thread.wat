@@ -334,9 +334,9 @@
         (local.get $sum)
     )
 
-    (func $main (export "_start") 
-        call $printA
-    )
+    ;; (func $main (export "_start") 
+    ;;     call $printA
+    ;; )
 
     (func $containing_log_2_i32 (param $param i32) (result i32) (local $p i32)
         ;; (local.set $param (i32.const 1023))
@@ -358,5 +358,5 @@
             )
         )
     )
-    (start $main)
+    ;; (start $main)
 )

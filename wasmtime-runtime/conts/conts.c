@@ -59,7 +59,9 @@ void init_table(void) {
 
     free_cont_id_list_top = 0;
 
+    // printf("mallocing %d bytes\n", STACK_SIZE * STACK_TABLE_SIZE);
     stacks_area = malloc16(STACK_SIZE * STACK_TABLE_SIZE);
+
     // printf("(2)\n");
     for (int i = 0; i < STACK_TABLE_SIZE; i++) {        
         free_stack_id_list[i] = (uint64_t)i;
