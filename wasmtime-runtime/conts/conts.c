@@ -24,7 +24,7 @@ typedef struct uthread_ctx_t {
 } uthread_ctx_t;
 
 #define CONT_TABLE_SIZE 100001
-#define STACK_SIZE 256 // 2^23, 8388608
+#define STACK_SIZE 1024 // 2^23, 8388608
 #define STACK_TABLE_SIZE 100001
 
 extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
