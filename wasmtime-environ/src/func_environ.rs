@@ -781,11 +781,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor<'_>,
         callee_index: FuncIndex,
         callee: ir::FuncRef,
-        call_args: &[ir::Value],
+        call_arg: ir::Value,
         mem_index: MemoryIndex,
     ) -> WasmResult<ir::Inst> {
-
-        // assert_eq!(call_args.len(), 0);
 
         let pointer_type = self.pointer_type();
 
@@ -794,55 +792,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let (func_sig, index_arg, func_idx) = self.get_control_func(&mut pos.func, mem_index);
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
 
-        // let callee_addr = pos.ins().iconst(I64, 0);
-        let arg = pos.ins().iconst(I64, 0);
-
         let call_inst = pos
             .ins()
-            .call_indirect(func_sig, func_addr, &[callee_addr, arg, vmctx]);
+            .call_indirect(func_sig, func_addr, &[callee_addr, call_arg, vmctx]);
 
         return Ok(call_inst)
-
-        // unimplemented!("func_environ: translate_control unimplemented!");
-
-
-        // let mut real_call_args = Vec::with_capacity(call_args.len() + 1);
-
-        // // Handle direct calls to locally-defined functions.
-        // if !self.module.is_imported_function(callee_index) {
-        //     // First append the callee vmctx address.
-        //     real_call_args.push(pos.func.special_param(ArgumentPurpose::VMContext).unwrap());
-
-        //     // Then append the regular call arguments.
-        //     real_call_args.extend_from_slice(call_args);
-
-        //     return Ok(pos.ins().call(callee, &real_call_args));
-        // }
-
-        // // Handle direct calls to imported functions. We use an indirect call
-        // // so that we don't have to patch the code at runtime.
-        // let pointer_type = self.pointer_type();
-        // let sig_ref = pos.func.dfg.ext_funcs[callee].signature;
-        // let vmctx = self.vmctx(&mut pos.func);
-        // let base = pos.ins().global_value(pointer_type, vmctx);
-
-        // let mem_flags = ir::MemFlags::trusted();
-
-        // // Load the callee address.
-        // let body_offset =
-        //     i32::try_from(self.offsets.vmctx_vmfunction_import_body(callee_index)).unwrap();
-        // let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
-
-        // // First append the callee vmctx address.
-        // let vmctx_offset =
-        //     i32::try_from(self.offsets.vmctx_vmfunction_import_vmctx(callee_index)).unwrap();
-        // let vmctx = pos.ins().load(pointer_type, mem_flags, base, vmctx_offset);
-        // real_call_args.push(vmctx);
-
-        // // Then append the regular call arguments.
-        // real_call_args.extend_from_slice(call_args);
-
-        // Ok(pos.ins().call_indirect(sig_ref, func_addr, &real_call_args))
     }
 
 

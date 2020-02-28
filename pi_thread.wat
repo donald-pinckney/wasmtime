@@ -34,7 +34,7 @@
         global.get $_to_capture_arg3
         global.get $_to_capture ;; we HAVE to put these onto the stack BEFORE doing control!!!
 
-        control $_save_k_restore
+        (control $_save_k_restore (i64.const 1337))
         drop
         call_indirect (type $proc)
     )
@@ -44,7 +44,7 @@
         (global.set $_to_capture_arg1 (local.get 1))
         (global.set $_to_capture_arg2 (local.get 2))
         (global.set $_to_capture_arg3 (local.get 3))
-        control $_kapture_handler
+        (control $_kapture_handler (i64.const 1337))
     )
 
 
@@ -185,7 +185,7 @@
     )
 
     (func $kthread_start
-        control $_kthread_start_handler
+        (control $_kthread_start_handler (i64.const 1337))
         drop
         ;; (restore (call $dequeue) (i64.const 7)) ;; value doesn't matter, not used in threads
     )
@@ -196,7 +196,7 @@
     )
 
     (func $kthread_yield
-        control $_kthread_yield_handler
+        (control $_kthread_yield_handler (i64.const 1337))
         drop
     )
 
@@ -295,7 +295,8 @@
 
         (block
             (loop
-                (call $kthread_create (i32.const 0) 
+                (call $kthread_create 
+                    (i32.const 0) 
                     (i64.add (i64.mul (local.get $k) (i64.const 8)) (i64.const 40)) 
                     (i64.mul (local.get $k) (local.get $termsPerThread))
                     (i64.sub (i64.add (local.get $termsPerThread) (i64.mul (local.get $k) (local.get $termsPerThread))) (i64.const 1))
