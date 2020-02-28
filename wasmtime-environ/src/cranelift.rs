@@ -10,7 +10,7 @@ use crate::compilation::{
 };
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
-    get_memory32_grow_name, get_memory32_size_name, get_setjmp_name, get_longjmp_name, get_control_name, get_restore_name, FuncEnvironment,
+    get_memory32_grow_name, get_memory32_size_name, get_control_name, get_restore_name, FuncEnvironment,
 };
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
@@ -58,10 +58,6 @@ impl binemit::RelocSink for RelocSink {
             RelocationTarget::Memory32Size
         } else if *name == get_imported_memory32_size_name() {
             RelocationTarget::ImportedMemory32Size
-        } else if *name == get_setjmp_name() {
-            RelocationTarget::Setjmp
-        } else if *name == get_longjmp_name() {
-            RelocationTarget::Longjmp
         } else if *name == get_control_name() {
             RelocationTarget::Control
         } else if *name == get_restore_name() {

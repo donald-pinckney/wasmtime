@@ -2,7 +2,6 @@
 #define signal_handlers_h
 
 #include <stdint.h>
-#include <setjmp.h>
 #ifndef __cplusplus
 #include <stdbool.h>
 #endif

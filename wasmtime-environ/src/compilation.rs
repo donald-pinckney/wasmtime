@@ -123,10 +123,6 @@ pub enum RelocationTarget {
     /// Function for query current size of an imported 32-bit linear memory.
     ImportedMemory32Size,
     /// Stuff
-    Setjmp,
-    /// Stuff
-    Longjmp,
-    /// Stuff
     Control,
     /// Stuff
     Restore,
