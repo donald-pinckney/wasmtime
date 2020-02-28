@@ -38,61 +38,76 @@ _control:
     // We can use the following registers freely, since they were already saved appropriately by the caller, and are not arguments (that we care about):
     // rax, rcx, r8, r9, r10, r11
 
-    //  ******** Save rdx to scratch space so we can use rdx  ********
-    movq rdx_scratch@GOTPCREL(%rip), %r12
-    movq %rdx, (%r12)
-
-
-    // rdx is free
-
     // ******** Get a new (free) continuation id ************
     // Not sure that I need to save %rax
     // Definitely want to save rdi and rsi
-    pushq %rax
     pushq %rdi
     pushq %rsi
+    pushq %rdx
     call _alloc_cont_id
-    movq %rax, %rdx
+    popq %rdx
     popq %rsi
     popq %rdi
-    popq %rax
+
+    // rax has the new continuation id
 
     // ******** Index into the continuation table  ********
-    // After this, r12 holds the pointer to the uthread_ctx_t
-    movq _cont_table@GOTPCREL(%rip), %r12
-    movq (%r12, %rdx, 8), %r12
+    // After this, r11 holds the pointer to the uthread_ctx_t
+    movq _cont_table@GOTPCREL(%rip), %r11
+    movq (%r11, %rax, 8), %r11
+
+    // CURRENT REGISTERS:
+    // rbx, rbp, r12, r13, r14, r15 = need to be saved
+    // rax = continuation ID
+    // r11 = uthread_ctx_t struct pointer
+    // rdi = fn_ptr
+    // rsi = arg
+    // rdx = vm context ptr
+    // rcx, r8, r9, r10 = scratch
 
     // ********  Save the current context into the context in the table   ********
-    movq %rsp, 16(%r12)
+    movq %rsp, 16(%r11)
     // We need to add 8 to the saved stack pointer so that we save the stack pointer from BEFORE the return address was pushed
-    addq $8, 16(%r12) // POSSIBLE BUG: DOES THIS MESS UP FLAGS / CC REGISTER?
-    movq %rax, 32(%r12)
-    movq %rbx, 40(%r12)
-    movq %rcx, 48(%r12)
-    movq %rdx, %rcx // rcx now holds the continuation id
-    // To save rdx we first need to load the original rdx that we saved in scratch memory
-    // Note that we HAVE to do this AFTER saving rax
-    movq rdx_scratch@GOTPCREL(%rip), %rax
-    movq (%rax), %rdx
-    movq %rdx, 56(%r12)
-    movq %rbp, 64(%r12)
-    movq %rsi, 72(%r12)
-    movq %rdi, 80(%r12)
+    addq $8, 16(%r11) // POSSIBLE BUG: DOES THIS MESS UP FLAGS / CC REGISTER?
+    movq %rax, 32(%r11)
+    movq %rbx, 40(%r11)
+    movq %rcx, 48(%r11)
+    movq %rdx, 56(%r11)
+    movq %rbp, 64(%r11)
+    movq %rsi, 72(%r11)
+    movq %rdi, 80(%r11)
+    // TODO: SAVE MORE REGISTERS!!! e.g. r12, r13, r14, r15
     // Save the return address (ip)
-    movq (%rsp), %rax
-    movq %rax, 24(%r12)
+    movq (%rsp), %rcx
+    movq %rcx, 24(%r11)
 
 
-    movq %rcx, %rbx
+
+
+    // ********  Allocate a new stack   ********
+    // First we need to rearrange some registers
+
+    // CURRENT REGISTERS:
+    // rax = continuation ID
+    // r11 = uthread_ctx_t struct pointer
+    // rdi = fn_ptr
+    // rsi = arg
+    // rdx = vm context ptr
+    // r12, r13, r14, r15, rbp, rbx, rcx, r8, r9, r10 = scratch
+
+    movq %rax, %rbx
+    movq %r11, %r12
     movq %rdi, %r13
     movq %rsi, %r14
-    // At this point, the registers are:
-    // rbx = continuation id
-    // r12 = pointer to uthread_ctx_t
-    // r13 = function pointer argument
-    // r14 = arg
-    // rdx = vm context ptr
+    movq %rdx, %r15
 
+    // CURRENT REGISTERS:
+    // rbx = continuation ID
+    // r12 = uthread_ctx_t struct pointer
+    // r13 = fn_ptr
+    // r14 = arg
+    // r15 = vm context ptr
+    // rbp, rax, rcx, r8, r9, r10, r11, rdi, rsi, rdx = scratch
 
     pushq    %rbp
     movq    %rsp, %rbp
@@ -100,39 +115,36 @@ _control:
     movq %rax, %rsp
     movq %rax, 0(%r12)
 
-    //pushq    %rbp
-    //movq    %rsp, %rbp
-    //movq 0(%r12), %rsp
-
-
-    //  ******** Alloc a new stack space  ********
-//    callq _continuation_alloc_stack
-
-    //movl $1024, %edi // 8388608
-    //callq _alloc_stack
-    //movq %rax, %rsp
-
-    //callq _malloc16
-    //movq %rax, %rsp
-
-    //  ******** Set rsp to new stack ********
-    //addq $1024, %rsp // 8388608
-    //subq $16, %rsp
+    // CURRENT REGISTERS:
+    // rbx = continuation ID
+    // r12 = uthread_ctx_t struct pointer
+    // r13 = fn_ptr
+    // r14 = arg
+    // r15 = vm context ptr
+    // rsp = new stack
+    // rbp, rax, rcx, r8, r9, r10, r11, rdi, rsi, rdx = scratch
 
 
     //  ******** Jump to given function pointer with vm context ptr (56(%r12), old rdx) as 1st arg,
     // continuation id (rbx) as 2nd arg, env (r14) as 3rd arg  ********
-    movq 56(%r12), %rdi
+
+    // We need to move the vm context ptr to rdi
+    // We need to move the continuation id to rsi
+    // We need to move the arg to rdx
+
+    movq %r15, %rdi
     movq %rbx, %rsi
     movq %r14, %rdx
-    //pushq %r8
-    //pushq %r10
-    //pushq %r11
-    //subq $8, %rsp
+
+    // CURRENT REGISTERS / ARGUMENTS:
+    //   1. rdi = vm context ptr
+    //   2. rsi = continuation ID
+    //   3. rdx = arg
+
+    // all else is scratch now
+
     callq *%r13
-    //popq %r11
-    //popq %r10
-    //popq %r8
+
 
     // If the invoked function ever returns (i.e. does not restore the continuation)
     // then we just kill the process.
