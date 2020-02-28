@@ -27,9 +27,17 @@ _mark_stack_start:
 
 
 
-// extern uint64_t control(handler_fn h);
+// pub fn control(fn_ptr: *mut u64, arg: u64, vm: *mut u64) -> u64;
 _control:
-    // Arguments: rdi = fn_ptr, rsi = arg, rdx = vm context ptr
+    // Arguments: 
+    //   1. rdi = fn_ptr
+    //   2. rsi = arg
+    //   3. rdx = vm context ptr
+
+
+    // We can use the following registers freely, since they were already saved appropriately by the caller, and are not arguments (that we care about):
+    // rax, rcx, r8, r9, r10, r11
+
     //  ******** Save rdx to scratch space so we can use rdx  ********
     movq rdx_scratch@GOTPCREL(%rip), %r12
     movq %rdx, (%r12)
@@ -135,11 +143,12 @@ _control:
     retq // not that this really matters
 
 
+// pub fn restore(k: u64, val: u64, vm: *mut u64);
 _restore:
-    // Current registers:
-    // rdi = continuation id
-    // rsi = argument for continuation
-    // rdx = vm context
+    // Arguments:
+    //   1. rdi = continuation id (k)
+    //   2. rsi = argument for continuation (val)
+    //   3. rdx = vm context
 
     // First, we MARK the given continuation id as free, but this does NOT wipe away the stuff stored in the table
     pushq %rdi
