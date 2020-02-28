@@ -162,39 +162,27 @@ _restore:
     //   2. rsi = argument for continuation (val)
     //   3. rdx = vm context
 
-    // First, we MARK the given continuation id as free, but this does NOT wipe away the stuff stored in the table
-    pushq %rdi
-    pushq %rsi
-    pushq %rdx
-    call _dealloc_cont_id
-    popq %rdx
-    popq %rsi
-    popq %rdi
 
     //  ******** Load the uthread_ctx_t from the _cont_table at index given by %rdi  ********
     movq _cont_table@GOTPCREL(%rip), %r12
     movq (%r12, %rdi, 8), %r12
 
+    //  ******** Save the argument for the continuation in rbx  ********
+    movq %rsi, %rbx
+
+    // CURRENT REGISTERS:
     // r12 = the pointer to the uthread_ctx_t
+    // rbx = argument for continuation
+
+    // ********* MARK the given continuation id as free, but this does NOT wipe away the stuff stored in the table ********
+    call _dealloc_cont_id
 
     // ********* Free the current stack ***********
-    //pushq    %rbp
-    //movq    %rsp, %rbp
-
-    //movq %rsp, %rdi
-
-    pushq %rdi
-    pushq %rsi
-    pushq %rdx
     movq %rsp, %rdi
-    subq $24, %rdi
     callq _dealloc_stack
-    popq %rdx
-    popq %rsi
-    popq %rdi
 
     //  ******** Move rsi (the argument value) to rax, this will become the argument to the restored continuation  ********
-    movq %rsi, %rax
+    movq %rbx, %rax
 
     //  ******** Restore all the registers OTHER THAN rax
     movq 16(%r12), %rsp
@@ -210,12 +198,5 @@ _restore:
     // Restore the rip, and jump to it
     movq 24(%r12), %r12
     jmpq *%r12
-
-    //  ******** Restore uthread_ctx_t, passing the argument rsi into rax  ********
-    retq
-
-
-
-
 
 .end
