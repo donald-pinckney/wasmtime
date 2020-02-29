@@ -1,8 +1,7 @@
 #include <stdlib.h>
-// #include <stdio.h>
 
 typedef struct uthread_ctx_t {
-    uint64_t table[11];
+    uint64_t table[10];
     
     /*
      By convention, table stores the following in order:
@@ -12,13 +11,12 @@ typedef struct uthread_ctx_t {
         void *sp;
         void *ip;
 
-        uint64_t rax;
         uint64_t rbx;
-        uint64_t rcx;
-        uint64_t rdx;
         uint64_t rbp;
-        uint64_t rsi;
-        uint64_t rdi;
+        uint64_t r12;
+        uint64_t r13;
+        uint64_t r14;
+        uint64_t r15;
      */
 
 } uthread_ctx_t;

@@ -65,22 +65,20 @@ _control:
     // rdx = vm context ptr
     // rcx, r8, r9, r10 = scratch
 
+
     // ********  Save the current context into the context in the table   ********
     movq %rsp, 16(%r11)
     // We need to add 8 to the saved stack pointer so that we save the stack pointer from BEFORE the return address was pushed
-    addq $8, 16(%r11) // POSSIBLE BUG: DOES THIS MESS UP FLAGS / CC REGISTER?
-    movq %rax, 32(%r11)
-    movq %rbx, 40(%r11)
-    movq %rcx, 48(%r11)
-    movq %rdx, 56(%r11)
-    movq %rbp, 64(%r11)
-    movq %rsi, 72(%r11)
-    movq %rdi, 80(%r11)
-    // TODO: SAVE MORE REGISTERS!!! e.g. r12, r13, r14, r15
+    addq $8, 16(%r11)
+    movq %rbx, 32(%r11)
+    movq %rbp, 40(%r11)
+    movq %r12, 48(%r11)
+    movq %r13, 56(%r11)
+    movq %r14, 64(%r11)
+    movq %r15, 72(%r11)
     // Save the return address (ip)
     movq (%rsp), %rcx
     movq %rcx, 24(%r11)
-
 
 
 
@@ -186,17 +184,15 @@ _restore:
 
     //  ******** Restore all the registers OTHER THAN rax
     movq 16(%r12), %rsp
-//    movq 32(%r12), %rax
-    movq 40(%r12), %rbx
-    movq 48(%r12), %rcx
-    movq 56(%r12), %rdx
-    movq 64(%r12), %rbp
-    movq 72(%r12), %rsi
-    movq 80(%r12), %rdi
-
-
-    // Restore the rip, and jump to it
-    movq 24(%r12), %r12
-    jmpq *%r12
+    movq 32(%r12), %rbx
+    movq 40(%r12), %rbp
+    movq 56(%r12), %r13
+    movq 64(%r12), %r14
+    movq 72(%r12), %r15
+    // Restore the ip
+    movq 24(%r12), %r11
+    // Restore r12
+    movq 48(%r12), %r12
+    jmpq *%r11
 
 .end
