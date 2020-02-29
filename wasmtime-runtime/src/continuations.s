@@ -17,8 +17,6 @@
 .section __DATA,__data
     // table_len: .byte 5000
     .align 3
-    rdx_scratch: .quad 0
-    _cont_id: .quad 0
     _cont_table: .skip 800008 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
 
 .text
