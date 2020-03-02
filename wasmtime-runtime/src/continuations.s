@@ -74,6 +74,7 @@ _control:
     movq %r13, 56(%r11)
     movq %r14, 64(%r11)
     movq %r15, 72(%r11)
+    movq $1, 80(%r11)
     // Save the return address (ip)
     movq (%rsp), %rcx
     movq %rcx, 24(%r11)
@@ -163,6 +164,16 @@ _restore:
     movq _cont_table@GOTPCREL(%rip), %r12
     movq (%r12, %rdi, 8), %r12
 
+    // ********* Check that the continuation has not already been used *********
+    movq 80(%r12), %rdx
+    cmpq $0, %rdx
+    jne not_consumed
+    // If it has been used already, trap
+    ud2
+
+
+    not_consumed:
+
     //  ******** Save the argument for the continuation in rbx  ********
     movq %rsi, %rbx
 
@@ -187,6 +198,7 @@ _restore:
     movq 56(%r12), %r13
     movq 64(%r12), %r14
     movq 72(%r12), %r15
+    movq $0, 80(%r12)
     // Restore the ip
     movq 24(%r12), %r11
     // Restore r12

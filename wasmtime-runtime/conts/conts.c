@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
 typedef struct uthread_ctx_t {
-    uint64_t table[10];
+    uint64_t table[11];
     
     /*
      By convention, table stores the following in order:
@@ -17,6 +17,8 @@ typedef struct uthread_ctx_t {
         uint64_t r13;
         uint64_t r14;
         uint64_t r15;
+
+        uint64_t is_alloced;
      */
 
 } uthread_ctx_t;
@@ -49,6 +51,7 @@ void init_table(void) {
 
     for (int i = 0; i < CONT_TABLE_SIZE; i++) {
         cont_table[i] = malloc(sizeof(uthread_ctx_t));
+        cont_table[i]->table[10] = 0;
         // cont_table[i]->table[0] = alloc_stack();
         
         free_cont_id_list[i] = (uint64_t)i;
