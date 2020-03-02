@@ -116,3 +116,8 @@ void dealloc_stack(void *sp) {
 
     free_stack_id_list[--free_stack_id_list_top] = id;
 }
+
+
+uint64_t continuation_copy(uint64_t k) {
+    return 0;
+} 

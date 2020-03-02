@@ -58,6 +58,10 @@ pub fn get_restore_name() -> ir::ExternalName {
     ir::ExternalName::user(1, 5)
 }
 
+pub fn get_continuation_copy_name() -> ir::ExternalName {
+    ir::ExternalName::user(1, 6)
+}
+
 /// An index type for builtin functions.
 pub struct BuiltinFunctionIndex(u32);
 
@@ -86,9 +90,13 @@ impl BuiltinFunctionIndex {
     pub const fn get_restore_index() -> Self {
         Self(5)
     }
+    /// Stuff
+    pub const fn get_continuation_copy_index() -> Self {
+        Self(6)
+    }
     /// Returns the total number of builtin functions.
     pub const fn builtin_functions_total_number() -> u32 {
-        6
+        7
     }
 
     /// Return the index as an u32 number.
@@ -122,6 +130,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// Stuff
     restore_sig: Option<ir::SigRef>,
 
+    /// Stuff
+    continuation_copy_sig: Option<ir::SigRef>,
+
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -136,6 +147,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             memory_grow_sig: None,
             control_sig: None,
             restore_sig: None,
+            continuation_copy_sig: None,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
         }
     }
@@ -226,6 +238,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         sig
     }
 
+    fn get_continuation_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
+        let sig = self.continuation_copy_sig.unwrap_or_else(|| {
+            func.import_signature(Signature {
+                params: vec![
+                    AbiParam::new(I64),
+                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
+                ],
+                returns: vec![
+                    AbiParam::new(I64)
+                ],
+                call_conv: self.target_config.default_call_conv,
+            })
+        });
+        self.continuation_copy_sig = Some(sig);
+
+        sig
+    }
+
 
     fn get_control_func(
         &mut self,
@@ -260,6 +290,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.get_restore_sig(func),
                 self.module.defined_memory_index(index).unwrap().index(),
                 BuiltinFunctionIndex::get_restore_index(),
+            )
+        }
+    }
+
+    fn get_continuation_copy_func(
+        &mut self,
+        func: &mut Function,
+        index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        if self.module.is_imported_memory(index) {
+            (
+                unimplemented!()
+            )
+        } else {
+            (
+                self.get_continuation_copy_sig(func),
+                self.module.defined_memory_index(index).unwrap().index(),
+                BuiltinFunctionIndex::get_continuation_copy_index(),
             )
         }
     }
@@ -817,6 +865,29 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let call_inst = pos
             .ins()
             .call_indirect(func_sig, func_addr, &[kid, arg, vmctx]);
+        
+        Ok(call_inst)
+        // Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+
+        // Ok(addr)
+    }
+
+    fn translate_continuation_copy(
+        &mut self,
+        mut pos: FuncCursor<'_>,
+        kid: ir::Value,
+        mem_index: MemoryIndex,
+    ) -> WasmResult<ir::Inst> {
+        let (func_sig, index_arg, func_idx) = self.get_continuation_copy_func(&mut pos.func, mem_index);
+
+        // let memory_index = pos.ins().iconst(I32, index_arg as i64);
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        // println!("[translate_restore] arg: {:?}, addr_type: {:}", addr, pos.func.dfg.value_type(addr));
+
+        let call_inst = pos
+            .ins()
+            .call_indirect(func_sig, func_addr, &[kid, vmctx]);
         
         Ok(call_inst)
         // Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())

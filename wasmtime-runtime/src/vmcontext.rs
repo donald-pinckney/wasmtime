@@ -539,6 +539,7 @@ impl VMBuiltinFunctionsArray {
             wasmtime_imported_memory32_size as usize;
         ptrs[BuiltinFunctionIndex::get_control_index().index() as usize] = control as usize;
         ptrs[BuiltinFunctionIndex::get_restore_index().index() as usize] = restore as usize;
+        ptrs[BuiltinFunctionIndex::get_continuation_copy_index().index() as usize] = continuation_copy as usize;
 
         Self { ptrs }
     }
