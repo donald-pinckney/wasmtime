@@ -23,20 +23,20 @@
         drop
         ;; (global.set $i)
 
-        ;; (if (i64.lt_u (global.get $i) (i64.const 10))
-        ;;     (then
-        ;;         (global.set $i (i64.add (global.get $i) (i64.const 1)))
-        ;;         (restore (global.get $k) (i64.const 9782342))
-        ;;     )
-        ;;     (else
+        (if (i64.lt_u (global.get $i) (i64.const 10))
+            (then
+                (global.set $i (i64.add (global.get $i) (i64.const 1)))
+                (restore (global.get $k) (i64.const 9782342))
+            )
+            (else
 
-        ;;     )
-        ;; )
+            )
+        )
 
-        unreachable
+        ;; unreachable
 
 
-        ;; (global.get $i)
+        (global.get $i)
     )
 
 )
