@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct uthread_ctx_t {
     uint64_t table[11];
@@ -28,6 +29,7 @@ typedef struct uthread_ctx_t {
 #define STACK_TABLE_SIZE 100001
 
 extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
+extern uint64_t current_stack_top;
 
 uint64_t free_cont_id_list[CONT_TABLE_SIZE];
 uint64_t free_cont_id_list_top = 0; // From this index we will alloc the next cont_id
@@ -48,6 +50,8 @@ uint64_t free_stack_id_list_top = 0; // From this index we will alloc the next s
 
 void init_table(void) {
     // printf("Starting init table\n");
+
+    current_stack_top = 0;
 
     for (int i = 0; i < CONT_TABLE_SIZE; i++) {
         cont_table[i] = malloc(sizeof(uthread_ctx_t));
@@ -118,6 +122,35 @@ void dealloc_stack(void *sp) {
 }
 
 
-uint64_t continuation_copy(uint64_t k) {
+uint64_t continuation_copy(uint64_t kid) {
+    uthread_ctx_t *k = cont_table[kid];
+    if(k->table[0] == 0 || k->table[10] == 0) {
+        abort(); // Can not copy the root continuation, and can not copy deallocated continuation.
+    }
+
+    void *stack_top = (void *)k->table[0];
+    void *rsp = (void *)k->table[2]; // copy from here
+    uint64_t rsp_offset = (uint64_t)stack_top - (uint64_t)rsp;
+    size_t bytes_to_copy = (size_t)rsp_offset + 8; // with this length
+
+    uint64_t new_kid = alloc_cont_id();
+    uthread_ctx_t *new_k = cont_table[new_kid];
+    void *new_stack_top = (void *)alloc_stack();
+    new_k->table[0] = (uint64_t)new_stack_top; // I think???
+    new_k->table[1] = k->table[1];
+    new_k->table[2] = (uint64_t)new_stack_top - rsp_offset;
+    new_k->table[3] = k->table[3];
+    new_k->table[4] = k->table[4];
+    new_k->table[5] = k->table[5];
+    new_k->table[6] = k->table[6];
+    new_k->table[7] = k->table[7];
+    new_k->table[8] = k->table[8];
+    new_k->table[9] = k->table[9];
+    new_k->table[10] = k->table[10];
+
+    memcpy((void *)new_k->table[2], rsp, bytes_to_copy);
+    // new_k->table
+
+
     return 0;
 } 

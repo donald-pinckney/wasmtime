@@ -14,11 +14,12 @@
 .globl _control
 .globl _cont_table
 //.globl _cont_id
+.globl _current_stack_top
 .section __DATA,__data
     // table_len: .byte 5000
     .align 3
     _cont_table: .skip 800008 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
-
+    _current_stack_top: .skip 8
 .text
 _mark_stack_start:
     retq
@@ -37,8 +38,6 @@ _control:
     // rax, rcx, r8, r9, r10, r11
 
     // ******** Get a new (free) continuation id ************
-    // Not sure that I need to save %rax
-    // Definitely want to save rdi and rsi
     pushq %rdi
     pushq %rsi
     pushq %rdx
@@ -63,7 +62,6 @@ _control:
     // rdx = vm context ptr
     // rcx, r8, r9, r10 = scratch
 
-
     // ********  Save the current context into the context in the table   ********
     movq %rsp, 16(%r11)
     // We need to add 8 to the saved stack pointer so that we save the stack pointer from BEFORE the return address was pushed
@@ -80,10 +78,6 @@ _control:
     movq %rcx, 24(%r11)
 
 
-
-    // ********  Allocate a new stack   ********
-    // First we need to rearrange some registers
-
     // CURRENT REGISTERS:
     // rax = continuation ID
     // r11 = uthread_ctx_t struct pointer
@@ -91,6 +85,11 @@ _control:
     // rsi = arg
     // rdx = vm context ptr
     // r12, r13, r14, r15, rbp, rbx, rcx, r8, r9, r10 = scratch
+
+
+    // ********  Allocate a new stack   ********
+    // First we need to rearrange some registers
+
 
     movq %rax, %rbx
     movq %r11, %r12
@@ -110,7 +109,12 @@ _control:
     movq    %rsp, %rbp
     callq _alloc_stack
     movq %rax, %rsp
-    movq %rax, 0(%r12)
+
+    // Mark the current top of the stack in the table.
+    movq _current_stack_top@GOTPCREL(%rip), %rax
+    movq (%rax), %rcx
+    movq %rcx, 0(%r12)
+    movq %rsp, (%rax)
 
     // CURRENT REGISTERS:
     // rbx = continuation ID
@@ -191,6 +195,12 @@ _restore:
     //  ******** Move rsi (the argument value) to rax, this will become the argument to the restored continuation  ********
     movq %rbx, %rax
 
+    // Update the current top of the stack again.
+    movq _current_stack_top@GOTPCREL(%rip), %rbx
+    movq 0(%r12), %r13
+    movq %r13, (%rbx)
+
+
     //  ******** Restore all the registers OTHER THAN rax
     movq 16(%r12), %rsp
     movq 32(%r12), %rbx
@@ -202,7 +212,9 @@ _restore:
     // Restore the ip
     movq 24(%r12), %r11
     // Restore r12
+
     movq 48(%r12), %r12
+
     jmpq *%r11
 
 .end
