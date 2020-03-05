@@ -12,7 +12,7 @@
     )
 
     (func $handler (param i64 i64) ;; k , arg
-        (restore (local.get 0) (i64.const 987))
+        (restore (continuation_copy (local.get 0)) (i64.const 987))
     )
 
     (func $main_handler (param i64 i64)
