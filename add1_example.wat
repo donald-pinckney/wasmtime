@@ -11,17 +11,19 @@
         (i64.add (i64.const 1) (local.get 0))
     )
 
-    (func $handler2 (param i64 i64)
-
-    )
-
     (func $handler (param i64 i64) ;; k , arg
-        (restore (local.get 0) (i64.const 0))
+        ;; (continuation_copy (local.get 0))
+        ;; drop
+        (restore (local.get 0) (continuation_copy (local.get 0)))
     )
 
+    (func $main_handler (param i64 i64)
+        ;; (restore (local.get 0) (local.get 0))
+        (restore (local.get 0) (control $handler (i64.const 1234)))
+    )
 
     (func $the_main (export "the_main") (result i64)
-        (call $add1 (control $handler (i64.const 1234)))
+        (control $main_handler (i64.const 1234))
     )
 
 )

@@ -152,5 +152,5 @@ uint64_t continuation_copy(uint64_t kid) {
     // new_k->table
 
 
-    return 0;
+    return new_kid;
 } 
