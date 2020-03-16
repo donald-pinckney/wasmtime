@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "*.v": "coq",
-        "stdio.h": "c"
-    }
-}
