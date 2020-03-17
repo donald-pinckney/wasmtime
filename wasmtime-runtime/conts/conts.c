@@ -122,7 +122,7 @@ void dealloc_stack(void *sp) {
 }
 
 
-uint64_t continuation_copy(uint64_t kid) {
+uint64_t continuation_copy(uint64_t kid, void *vmctx) {
     uthread_ctx_t *k = cont_table[kid];
     if(k->table[0] == 0 || k->table[10] == 0) {
         abort(); // Can not copy the root continuation, and can not copy deallocated continuation.
