@@ -25,7 +25,7 @@ typedef struct uthread_ctx_t {
 } uthread_ctx_t;
 
 #define CONT_TABLE_SIZE 100001
-#define STACK_SIZE 1024 // 2^23, 8388608
+#define STACK_SIZE 1048576 // 1024, 2^23, 8388608
 #define STACK_TABLE_SIZE 100001
 
 extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
@@ -54,7 +54,7 @@ void init_table(void) {
     current_stack_top = 0;
 
     for (int i = 0; i < CONT_TABLE_SIZE; i++) {
-        cont_table[i] = malloc(sizeof(uthread_ctx_t));
+        cont_table[i] = (uthread_ctx_t *)malloc(sizeof(uthread_ctx_t));
         cont_table[i]->table[10] = 0;
         // cont_table[i]->table[0] = alloc_stack();
         
@@ -65,7 +65,7 @@ void init_table(void) {
     free_cont_id_list_top = 0;
 
     // printf("mallocing %d bytes\n", STACK_SIZE * STACK_TABLE_SIZE);
-    stacks_area = malloc16(STACK_SIZE * STACK_TABLE_SIZE);
+    stacks_area = (char *)malloc16(STACK_SIZE * STACK_TABLE_SIZE);
 
     // printf("(2)\n");
     for (int i = 0; i < STACK_TABLE_SIZE; i++) {        
@@ -133,15 +133,21 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
     uint64_t rsp_offset = (uint64_t)stack_top - (uint64_t)rsp;
     size_t bytes_to_copy = (size_t)rsp_offset + 8; // with this length
 
+    uint64_t rbp_rsp_offset = k->table[5] - (uint64_t)rsp;
+
+
     uint64_t new_kid = alloc_cont_id();
-    uthread_ctx_t *new_k = cont_table[new_kid];
     void *new_stack_top = (void *)alloc_stack();
+    uint64_t new_rsp = (uint64_t)new_stack_top - rsp_offset;
+    uint64_t new_rbp = new_rsp + rbp_rsp_offset;
+
+    uthread_ctx_t *new_k = cont_table[new_kid];
     new_k->table[0] = (uint64_t)new_stack_top; // I think???
     new_k->table[1] = k->table[1];
     new_k->table[2] = (uint64_t)new_stack_top - rsp_offset;
     new_k->table[3] = k->table[3];
     new_k->table[4] = k->table[4];
-    new_k->table[5] = k->table[5];
+    new_k->table[5] = new_rbp; // rbp, change to be offset from rsp???
     new_k->table[6] = k->table[6];
     new_k->table[7] = k->table[7];
     new_k->table[8] = k->table[8];
