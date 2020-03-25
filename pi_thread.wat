@@ -15,6 +15,8 @@
         )
     )
 
+    (global $numTerms i64 (i64.const 100000000)) ;; 100000000
+    (global $numThreads i64 (i64.const 100000)) ;; 100000
 
     (global $_after_kapture (mut i64) (i64.const 0)) ;; continuation_id
     (global $_to_capture (mut i32) (i32.const 0)) ;; kthread_func_t
@@ -266,8 +268,7 @@
 
 
 
-    (global $numTerms i64 (i64.const 100000000)) ;; 100000000
-    (global $numThreads i64 (i64.const 100000)) ;; 100000
+
 
 
     (func $the_main (export "the_main") (result f64) (local $numTerms i64) (local $k i64) (local $termsPerThread i64) (local $sum f64)
