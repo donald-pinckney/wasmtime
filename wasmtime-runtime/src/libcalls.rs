@@ -145,4 +145,5 @@ extern "C" {
     pub fn continuation_copy(k: u64, vm: *mut u64) -> u64;
 
     pub fn init_table();
+    pub fn reset_stack_top();
 }

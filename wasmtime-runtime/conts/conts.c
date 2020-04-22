@@ -47,11 +47,15 @@ char *stacks_area = NULL;
 uint64_t free_stack_id_list[STACK_TABLE_SIZE];
 uint64_t free_stack_id_list_top = 0; // From this index we will alloc the next stack id
 
+void reset_stack_top() {
+    // printf("Reseting stack top\n");
+    current_stack_top = 0;
+}
 
 void init_table(void) {
     // printf("Starting init table\n");
 
-    current_stack_top = 0;
+    reset_stack_top();
 
     for (int i = 0; i < CONT_TABLE_SIZE; i++) {
         cont_table[i] = (uthread_ctx_t *)malloc(sizeof(uthread_ctx_t));

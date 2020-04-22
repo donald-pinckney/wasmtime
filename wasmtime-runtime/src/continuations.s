@@ -114,6 +114,7 @@ _control:
     movq _current_stack_top@GOTPCREL(%rip), %rax
     movq (%rax), %rcx
     movq %rcx, 0(%r12)
+    // Update the current top of the stack
     movq %rsp, (%rax)
 
     // CURRENT REGISTERS:

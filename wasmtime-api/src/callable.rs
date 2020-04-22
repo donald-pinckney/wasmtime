@@ -84,6 +84,8 @@ impl WrappedCallable for WasmtimeFn {
             .get_published_trampoline(body, &signature, value_size)
             .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
 
+        unsafe { wasmtime_runtime::libcalls::reset_stack_top() };
+
         // Call the trampoline.
         if let Err(message) = unsafe {
             wasmtime_runtime::wasmtime_call_trampoline(
