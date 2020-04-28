@@ -25,7 +25,7 @@ typedef struct uthread_ctx_t {
 } uthread_ctx_t;
 
 #define CONT_TABLE_SIZE 100001
-#define STACK_SIZE 1024 // 1024, 2^23, 8388608, 1048576
+#define STACK_SIZE 1048576 // 1024, 2^23, 8388608, 1048576
 #define STACK_TABLE_SIZE 100001
 
 extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
@@ -70,6 +70,8 @@ void init_table(void) {
 
     // printf("mallocing %d bytes\n", STACK_SIZE * STACK_TABLE_SIZE);
     stacks_area = (char *)malloc16(STACK_SIZE * STACK_TABLE_SIZE);
+
+    // printf("%llu\n", (uint64_t)stacks_area);
 
     // printf("(2)\n");
     for (int i = 0; i < STACK_TABLE_SIZE; i++) {        
