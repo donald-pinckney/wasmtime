@@ -170,3 +170,7 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
 void prompt(void *vmctx) {
     
 }
+
+void continuation_delete(uint64_t kid, void *vmctx) {
+    
+}

@@ -130,6 +130,8 @@ pub enum RelocationTarget {
     ContinuationCopy,
     /// Stuff
     Prompt,
+    /// Stuff
+    ContinuationDelete,
     /// Jump table index.
     JumpTable(FuncIndex, ir::JumpTable),
 }

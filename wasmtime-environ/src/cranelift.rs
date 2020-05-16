@@ -10,7 +10,7 @@ use crate::compilation::{
 };
 use crate::func_environ::{
     get_func_name, get_imported_memory32_grow_name, get_imported_memory32_size_name,
-    get_memory32_grow_name, get_memory32_size_name, get_control_name, get_restore_name, get_continuation_copy_name, get_prompt_name, FuncEnvironment,
+    get_memory32_grow_name, get_memory32_size_name, get_control_name, get_restore_name, get_continuation_copy_name, get_prompt_name, get_continuation_delete_name, FuncEnvironment,
 };
 use crate::module::Module;
 use crate::module_environ::FunctionBodyData;
@@ -66,6 +66,8 @@ impl binemit::RelocSink for RelocSink {
             RelocationTarget::ContinuationCopy
         } else if *name == get_prompt_name() {
             RelocationTarget::Prompt
+        } else if *name == get_continuation_delete_name() {
+            RelocationTarget::ContinuationDelete
         } else if let ExternalName::User { namespace, index } = *name {
             debug_assert!(namespace == 0);
             RelocationTarget::UserFunc(FuncIndex::from_u32(index))
