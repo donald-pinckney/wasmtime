@@ -172,5 +172,6 @@ void prompt(void *vmctx) {
 }
 
 void continuation_delete(uint64_t kid, void *vmctx) {
-    
+    dealloc_stack(cont_table[kid]->table[0]);
+    dealloc_cont_id(kid);
 }
