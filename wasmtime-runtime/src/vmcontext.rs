@@ -540,6 +540,7 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::get_control_index().index() as usize] = control as usize;
         ptrs[BuiltinFunctionIndex::get_restore_index().index() as usize] = restore as usize;
         ptrs[BuiltinFunctionIndex::get_continuation_copy_index().index() as usize] = continuation_copy as usize;
+        ptrs[BuiltinFunctionIndex::get_prompt_index().index() as usize] = prompt as usize;
 
         Self { ptrs }
     }

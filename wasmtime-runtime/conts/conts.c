@@ -165,4 +165,8 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
 
 
     return new_kid;
-} 
+}
+
+void prompt(void *vmctx) {
+    
+}

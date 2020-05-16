@@ -143,6 +143,7 @@ extern "C" {
     pub fn control(fn_ptr: *mut u64, arg: u64, vm: *mut u64) -> u64;
     pub fn restore(k: u64, val: u64, vm: *mut u64);
     pub fn continuation_copy(k: u64, vm: *mut u64) -> u64;
+    pub fn prompt(vm: *mut u64) -> u64;
 
     pub fn init_table();
     pub fn reset_stack_top();

@@ -128,6 +128,8 @@ pub enum RelocationTarget {
     Restore,
     /// Stuff
     ContinuationCopy,
+    /// Stuff
+    Prompt,
     /// Jump table index.
     JumpTable(FuncIndex, ir::JumpTable),
 }

@@ -323,6 +323,7 @@ fn relocate(
                 RelocationTarget::Control => control as usize,
                 RelocationTarget::Restore => restore as usize,
                 RelocationTarget::ContinuationCopy => continuation_copy as usize,
+                RelocationTarget::Prompt => prompt as usize,
 
                 RelocationTarget::LibCall(libcall) => {
                     use cranelift_codegen::ir::LibCall::*;
