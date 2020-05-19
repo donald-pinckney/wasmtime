@@ -1,0 +1,26 @@
+(module
+    
+    ;; (import "spectest" "print" (func $print) (param i32)))
+    (import "spectest" "print_i32" (func $print_i32 (param i32)))
+
+    (func $drop_i32 (param i32)
+        (call $print_i32 (local.get 0))
+    )
+
+    (func $the_main (export "the_main")
+        i32.const 1035
+        call $drop_i32
+
+        (block
+            (prompt
+                i32.const 2
+                call $drop_i32
+                ;; call $__shim_control
+                ;; return
+                ;; br 0
+            )
+        )
+        i32.const 1061
+        call $drop_i32
+    )
+)

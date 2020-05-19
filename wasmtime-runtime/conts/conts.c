@@ -174,6 +174,7 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
 
 void prompt_begin(void *vmctx) {
     printf("[prompt_begin]\n");
+    
 }
 
 void prompt_end(void *vmctx) {
