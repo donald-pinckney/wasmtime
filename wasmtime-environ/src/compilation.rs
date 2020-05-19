@@ -129,7 +129,9 @@ pub enum RelocationTarget {
     /// Stuff
     ContinuationCopy,
     /// Stuff
-    Prompt,
+    PromptBegin,
+    /// Stuff
+    PromptEnd,
     /// Stuff
     ContinuationDelete,
     /// Jump table index.

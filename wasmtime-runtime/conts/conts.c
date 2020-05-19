@@ -20,6 +20,7 @@ typedef struct uthread_ctx_t {
         uint64_t r15;
 
         uint64_t is_alloced;
+        uint64_t prompt_depth; // prompt depth at the time of continuation allocation.
      */
 
 } uthread_ctx_t;
@@ -30,6 +31,7 @@ typedef struct uthread_ctx_t {
 
 extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
 extern uint64_t current_stack_top;
+extern uint64_t current_prompt_depth;
 
 uint64_t free_cont_id_list[CONT_TABLE_SIZE];
 uint64_t free_cont_id_list_top = 0; // From this index we will alloc the next cont_id
@@ -53,9 +55,11 @@ void reset_stack_top() {
 }
 
 void init_table(void) {
-    // printf("Starting init table\n");
+    printf("Starting init table\n");
 
     reset_stack_top();
+
+    current_prompt_depth = 0;
 
     for (int i = 0; i < CONT_TABLE_SIZE; i++) {
         cont_table[i] = (uthread_ctx_t *)malloc(sizeof(uthread_ctx_t));
@@ -159,6 +163,7 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
     new_k->table[8] = k->table[8];
     new_k->table[9] = k->table[9];
     new_k->table[10] = k->table[10];
+    new_k->table[11] = k->table[11];
 
     memcpy((void *)new_k->table[2], rsp, bytes_to_copy);
     // new_k->table
@@ -167,9 +172,15 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
     return new_kid;
 }
 
-void prompt(void *vmctx) {
-    
+void prompt_begin(void *vmctx) {
+    printf("[prompt_begin]\n");
 }
+
+void prompt_end(void *vmctx) {
+    printf("[prompt_end]\n");
+}
+
+// void unprompt(void *vm)
 
 void continuation_delete(uint64_t kid, void *vmctx) {
     dealloc_stack(cont_table[kid]->table[0]);

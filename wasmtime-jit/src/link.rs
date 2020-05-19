@@ -323,7 +323,8 @@ fn relocate(
                 RelocationTarget::Control => control as usize,
                 RelocationTarget::Restore => restore as usize,
                 RelocationTarget::ContinuationCopy => continuation_copy as usize,
-                RelocationTarget::Prompt => prompt as usize,
+                RelocationTarget::PromptBegin => prompt_begin as usize,
+                RelocationTarget::PromptEnd => prompt_end as usize,
                 RelocationTarget::ContinuationDelete => continuation_delete as usize,
 
                 RelocationTarget::LibCall(libcall) => {

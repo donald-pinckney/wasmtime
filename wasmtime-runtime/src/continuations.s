@@ -15,11 +15,13 @@
 .globl _cont_table
 //.globl _cont_id
 .globl _current_stack_top
+.globl _current_prompt_depth
 .section __DATA,__data
     // table_len: .byte 5000
     .align 3
     _cont_table: .skip 800008 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
     _current_stack_top: .skip 8
+    _current_prompt_depth: .skip 8
 .text
 _mark_stack_start:
     retq
@@ -62,6 +64,10 @@ _control:
     // rdx = vm context ptr
     // rcx, r8, r9, r10 = scratch
 
+    // Retrieve current prompt depth
+    movq _current_prompt_depth@GOTPCREL(%rip), %rcx
+    movq (%rcx), %rcx
+
     // ********  Save the current context into the context in the table   ********
     movq %rsp, 16(%r11)
     // We need to add 8 to the saved stack pointer so that we save the stack pointer from BEFORE the return address was pushed
@@ -73,6 +79,7 @@ _control:
     movq %r14, 64(%r11)
     movq %r15, 72(%r11)
     movq $1, 80(%r11)
+    movq %rcx, 88(%r11)
     // Save the return address (ip)
     movq (%rsp), %rcx
     movq %rcx, 24(%r11)
