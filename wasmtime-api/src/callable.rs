@@ -84,7 +84,10 @@ impl WrappedCallable for WasmtimeFn {
             .get_published_trampoline(body, &signature, value_size)
             .map_err(|_| HostRef::new(Trap::fake()))?; //was ActionError::Setup)?;
 
-        unsafe { wasmtime_runtime::libcalls::reset_stack_top() };
+        unsafe { 
+            // println!("HERE!");
+            wasmtime_runtime::libcalls::prompt_begin(vmctx as *mut u64);
+        };
 
         // Call the trampoline.
         if let Err(message) = unsafe {
@@ -94,8 +97,18 @@ impl WrappedCallable for WasmtimeFn {
                 values_vec.as_mut_ptr() as *mut u8,
             )
         } {
+            unsafe { 
+                // println!("DONE (Error case)!");
+                wasmtime_runtime::libcalls::prompt_end(vmctx as *mut u64);
+            };
             return Err(HostRef::new(Trap::new(message)));
         }
+
+        unsafe { 
+            // println!("DONE!");
+            wasmtime_runtime::libcalls::prompt_end(vmctx as *mut u64);
+        };
+
 
         // Load the return values out of `values_vec`.
         for (index, abi_param) in signature.returns.iter().enumerate() {

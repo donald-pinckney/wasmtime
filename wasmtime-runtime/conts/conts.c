@@ -67,7 +67,7 @@ void reset_stack_top() {
 }
 
 void init_table(void) {
-    printf("Starting init table\n");
+    // printf("Starting init table\n");
 
     reset_stack_top();
 
@@ -154,8 +154,14 @@ void dealloc_stack(void *sp) {
 
 uint64_t continuation_copy(uint64_t kid, void *vmctx) {
     uthread_ctx_t *k = cont_table[kid];
-    if(k->table[0] == 0 || k->table[10] == 0) {
-        abort(); // Can not copy the root continuation, and can not copy deallocated continuation.
+
+    // Can not copy the root continuation, and can not copy deallocated continuation.
+    if(k->table[0] == 0) {
+        printf("*** CONTROL VIOLATION ***\nAttempted to copy a root continuation.\n");
+        abort();
+    } else if(k->table[10] == 0) {
+        printf("*** CONTROL VIOLATION ***\nAttempted to copy a deallocated continuation.\n");
+        abort();
     }
 
     void *stack_top = (void *)k->table[0];
@@ -200,7 +206,8 @@ void prompt_begin(void *vmctx) {
     }
     
     current_stack_top_saved[current_prompt_depth] = current_stack_top;
-    current_stack_top = 0;
+    // current_stack_top = 0;
+    reset_stack_top();
     current_prompt_depth++;
 }
 
