@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stdio.h>
+
 typedef struct uthread_ctx_t {
-    uint64_t table[11];
+    uint64_t table[12];
     
     /*
      By convention, table stores the following in order:
@@ -28,13 +30,23 @@ typedef struct uthread_ctx_t {
 #define CONT_TABLE_SIZE 100001
 #define STACK_SIZE 1048576 // 1024, 2^23, 8388608, 1048576
 #define STACK_TABLE_SIZE 100001
+#define MAX_PROMPT_DEPTH 1024
 
 extern uthread_ctx_t *cont_table[CONT_TABLE_SIZE];
 extern uint64_t current_stack_top;
 extern uint64_t current_prompt_depth;
 
+typedef struct AllocedKidList {
+    uint64_t kid;
+    struct AllocedKidList *next;
+} AllocedKidList;
+
 uint64_t free_cont_id_list[CONT_TABLE_SIZE];
 uint64_t free_cont_id_list_top = 0; // From this index we will alloc the next cont_id
+AllocedKidList *alloc_list_stack[MAX_PROMPT_DEPTH];
+uint64_t current_stack_top_saved[MAX_PROMPT_DEPTH];
+
+
 
 
 // from: https://stackoverflow.com/questions/227897/how-to-allocate-aligned-memory-only-using-the-standard-library
@@ -82,6 +94,8 @@ void init_table(void) {
         free_stack_id_list[i] = (uint64_t)i;
     }
     // printf("(3)\n");
+
+    alloc_list_stack[0] = NULL;
 }
 
 
@@ -94,7 +108,13 @@ uint64_t alloc_cont_id() {
         // printf("alloc cont: %llu\n", id);
         return id;
     }
-    
+}
+
+void register_cont_id_in_prompt_depth(uint64_t kid, uint64_t prompt_depth) {
+    AllocedKidList *node = (AllocedKidList *)malloc(sizeof(AllocedKidList));
+    node->kid = kid;
+    node->next = alloc_list_stack[prompt_depth];
+    alloc_list_stack[prompt_depth] = node;
 }
 
 void dealloc_cont_id(uint64_t id) {
@@ -174,16 +194,35 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
 
 void prompt_begin(void *vmctx) {
     printf("[prompt_begin]\n");
+
+    if(current_prompt_depth == MAX_PROMPT_DEPTH - 1) {
+        abort();
+    }
     
+    current_stack_top_saved[current_prompt_depth] = current_stack_top;
+    current_stack_top = 0;
+    current_prompt_depth++;
 }
 
 void prompt_end(void *vmctx) {
     printf("[prompt_end]\n");
+    // TODO: deallocate all continuations in current_prompt_depth
+    AllocedKidList *node = alloc_list_stack[current_prompt_depth];
+    while(node != NULL) {
+        cont_table[node->kid]->table[10] = 0; // Mark the continuation as consumed.
+        AllocedKidList *next_tmp = node->next;
+        free(node);
+        node = next_tmp;
+    }
+    alloc_list_stack[current_prompt_depth] = NULL;
+    current_prompt_depth--;
+    current_stack_top = current_stack_top_saved[current_prompt_depth];
 }
 
 // void unprompt(void *vm)
 
 void continuation_delete(uint64_t kid, void *vmctx) {
+    cont_table[kid]->table[10] = 0; // Mark the continuation as consumed.
     dealloc_stack(cont_table[kid]->table[0]);
     dealloc_cont_id(kid);
 }

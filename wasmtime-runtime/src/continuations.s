@@ -183,8 +183,20 @@ _restore:
     // If it has been used already, trap
     ud2
 
-
     not_consumed:
+
+
+    // ********* Check that the continuation to restore is at the correct (current) prompt depth *********
+    movq _current_prompt_depth@GOTPCREL(%rip), %rbx
+    movq (%rbx), %rbx
+    movq 88(%r12), %rdx
+    cmpq %rbx, %rdx
+    je ok_prompt_depth
+    // If the continuation to restore is from a different prompt depth, trap
+    ud2
+
+    ok_prompt_depth:
+
 
     //  ******** Save the argument for the continuation in rbx  ********
     movq %rsi, %rbx
@@ -216,7 +228,7 @@ _restore:
     movq 56(%r12), %r13
     movq 64(%r12), %r14
     movq 72(%r12), %r15
-    movq $0, 80(%r12)
+    movq $0, 80(%r12) // Mark the continuation as consumed
     // Restore the ip
     movq 24(%r12), %r11
     // Restore r12
