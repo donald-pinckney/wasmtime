@@ -17,13 +17,9 @@
 
         (block
             (prompt
-                i32.const 2
-                call $drop_i32
-                ;; call $__shim_control
-                ;; return
-                ;; br 0
+                br 1
             )
-        )
+        ) ;; branch to
         i32.const 1061
         call $drop_i32
     )
