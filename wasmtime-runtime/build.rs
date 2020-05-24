@@ -36,7 +36,10 @@ fn main() {
 
     println!("cargo:rerun-if-changed=src/continuations.s");
     let out_dir = env::var("OUT_DIR").unwrap();
-    if !(Command::new("as").args(&["-o", &(out_dir.clone() + "/continuations.o"),
+    if !(Command::new("clang").args(&["-o", &(out_dir.clone() + "/continuations.o"),
+                                   "-x", "assembler",
+                                   "-integrated-as",
+                                   "-c",
                                    "src/continuations.s"])
                            .status().unwrap().success() &&
          Command::new("ar").args(&["-crus",
