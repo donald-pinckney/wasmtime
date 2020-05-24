@@ -16,9 +16,7 @@
 //.globl _cont_id
 .globl _current_stack_top
 .globl _current_prompt_depth
-.section __DATA,__data
-    // table_len: .byte 5000
-    .align 3
+.data    
     _cont_table: .skip 800008 // has to be the same as 8 * CONT_TABLE_SIZE in conts.c
     _current_stack_top: .skip 8
     _current_prompt_depth: .skip 8
