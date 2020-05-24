@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <stdio.h>
+#include <stdint.h>
 
 typedef struct uthread_ctx_t {
     uint64_t table[12];
@@ -50,7 +51,7 @@ uint64_t current_stack_top_saved[MAX_PROMPT_DEPTH];
 
 
 // from: https://stackoverflow.com/questions/227897/how-to-allocate-aligned-memory-only-using-the-standard-library
-void *malloc16(size_t size) {
+void *malloc16(uint64_t size) {
     void *mem = malloc(size+15);
     void *ptr = (void *)(((uint64_t)mem+15) & ~ (uint64_t)0x0F);
     return ptr;
@@ -167,7 +168,7 @@ uint64_t continuation_copy(uint64_t kid, void *vmctx) {
     void *stack_top = (void *)k->table[0];
     void *rsp = (void *)k->table[2]; // copy from here
     uint64_t rsp_offset = (uint64_t)stack_top - (uint64_t)rsp;
-    size_t bytes_to_copy = (size_t)rsp_offset + 8; // with this length
+    uint64_t bytes_to_copy = rsp_offset + 8; // with this length
 
     uint64_t rbp_rsp_offset = k->table[5] - (uint64_t)rsp;
 
@@ -230,6 +231,6 @@ void prompt_end(void *vmctx) {
 
 void continuation_delete(uint64_t kid, void *vmctx) {
     cont_table[kid]->table[10] = 0; // Mark the continuation as consumed.
-    dealloc_stack(cont_table[kid]->table[0]);
+    dealloc_stack((void *)(cont_table[kid]->table[0]));
     dealloc_cont_id(kid);
 }
