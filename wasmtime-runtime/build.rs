@@ -40,14 +40,18 @@ fn main() {
     let asm_dep_file = &(out_dir.clone() + "/continuations_machine_dep.s");
 
     #[cfg(target_os = "macos")]
-    // copy continuations.s to machine-dependent place
-    Command::new("cp").args(&["src/continuations.s", asm_dep_file]).status().unwrap().success();
+    {
+        // copy continuations.s to machine-dependent place
+        Command::new("cp").args(&["src/continuations.s", asm_dep_file]).status().unwrap().success();
+        println!("[MACOS] copying src/continuations.s to {}", asm_dep_file)
+    }
     #[cfg(target_os = "linux")]
     {
         //sed 's/_control/control/g' src/continuations.s
         let replace_cmd = "s/_control/control/g; s/_restore/restore/g; s/_current_stack_top/current_stack_top/g; s/_current_prompt_depth/current_prompt_depth/g; s/_cont_table/cont_table/g; s/_alloc_cont_id/alloc_cont_id/g; s/_alloc_stack/alloc_stack/g; s/_dealloc_cont_id/dealloc_cont_id/g; s/_dealloc_stack/dealloc_stack/g";
         let out_f = File::create(asm_dep_file).unwrap();
         Command::new("sed").stdout(out_f).args(&[replace_cmd, "src/continuations.s"]).status().unwrap().success();
+        println!("[LINUX] rewriting src/continuations.s to {}", asm_dep_file)
     }
 
     if !(Command::new("clang").args(&["-o", &(out_dir.clone() + "/continuations.o"),
